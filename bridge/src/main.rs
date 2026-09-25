@@ -397,7 +397,7 @@ async fn workspace(
                 security::reject_link(&entry.path())?;
                 let target = dir.path().join("runs").join(entry.file_name());
                 std::fs::create_dir_all(&target)?;
-                for name in ["out", "cache"] {
+                for name in ["out"].into_iter().chain(build::PRESERVED_CACHES) {
                     let from = entry.path().join(name);
                     if from.is_dir() {
                         security::reject_link(&from)?;

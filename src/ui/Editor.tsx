@@ -65,7 +65,8 @@ export function Editor({
     adapter.current?.setActive(active);
   }, [active]);
   useEffect(() => {
-    if (jump?.id === document.id) adapter.current?.jump(jump.line);
-  }, [jump?.nonce]);
+    if (jump?.id !== document.id || !active) return;
+    adapter.current?.jump(jump.line);
+  }, [jump?.nonce, active]);
   return <div ref={host} className="code-editor" hidden={!active} />;
 }

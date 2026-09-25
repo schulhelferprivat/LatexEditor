@@ -17,6 +17,19 @@ pub struct Job {
     pub request: BuildRequest,
     pub owner: String,
 }
+async fn report_progress(job: &Job, stages: &Mutex<Vec<String>>, index: usize, stage: String) {
+    let line = {
+        let mut stages = stages.lock().await;
+        stages[index] = stage;
+        stages
+            .iter()
+            .filter(|stage| !stage.is_empty())
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" · ")
+    };
+    job.result.lock().await.progress = line;
+}
 pub fn diagnostics(log: &str, main: &str) -> Vec<Diagnostic> {
     let pattern = regex::Regex::new(r"^(.+?\.(?:tex|sty|cls|bib)):(\d+):[ \t]*(.*)$").unwrap();
     let source_line = regex::Regex::new(r"^l\.(\d+)\b").unwrap();
@@ -94,6 +107,19 @@ pub fn diagnostics(log: &str, main: &str) -> Vec<Diagnostic> {
     }
     items
 }
+pub const PRESERVED_CACHES: [&str; 3] = ["cache", "texmf", "config"];
+fn is_unchanged(source: &std::fs::Metadata, dest: &Path) -> bool {
+    let Ok(existing) = dest.metadata() else {
+        return false;
+    };
+    if !existing.is_file() || existing.len() != source.len() {
+        return false;
+    }
+    match (source.modified(), existing.modified()) {
+        (Ok(from), Ok(to)) => from == to,
+        _ => false,
+    }
+}
 pub fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
     for entry in std::fs::read_dir(from).map_err(|e| e.to_string())? {
@@ -107,7 +133,37 @@ pub fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
         if kind.is_dir() {
             copy_tree(&entry.path(), &dest)?;
         } else if kind.is_file() {
-            std::fs::copy(entry.path(), dest).map_err(|e| e.to_string())?;
+            let metadata = entry.metadata().map_err(|e| e.to_string())?;
+            if is_unchanged(&metadata, &dest) {
+                continue;
+            }
+            std::fs::copy(entry.path(), &dest).map_err(|e| e.to_string())?;
+            let modified = metadata.modified().map_err(|e| e.to_string())?;
+            std::fs::File::options()
+                .write(true)
+                .open(&dest)
+                .and_then(|file| file.set_modified(modified))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+fn clear_except_caches(dir: &Path) -> Result<(), String> {
+    for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        security::reject_link(&entry.path())?;
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_dir()
+            && PRESERVED_CACHES
+                .iter()
+                .any(|name| entry.file_name() == *name)
+        {
+            continue;
+        }
+        if kind.is_dir() {
+            std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
+        } else {
+            std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -180,6 +236,8 @@ async fn compile(
     job: &Job,
     variant: &Variant,
     tools: &HashMap<String, PathBuf>,
+    stages: &Mutex<Vec<String>>,
+    index: usize,
 ) -> Result<VariantResult, String> {
     let dir = job.root.join("runs").join(&variant.id);
     let cache_key = format!(
@@ -202,7 +260,7 @@ async fn compile(
         .as_deref()
         == Some(&cache_key);
     if dir.exists() && !cached {
-        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+        clear_except_caches(&dir)?;
     }
     copy_tree(&job.root.join("input"), &dir)?;
     std::fs::create_dir_all(dir.join("out")).map_err(|e| e.to_string())?;
@@ -273,7 +331,13 @@ async fn compile(
     let mut bibliography = Vec::new();
     let mut converged = false;
     for pass in 1..=5 {
-        job.result.lock().await.progress = format!("{} · Durchlauf {pass}", variant.name);
+        report_progress(
+            job,
+            stages,
+            index,
+            format!("{} · Durchlauf {pass}", variant.name),
+        )
+        .await;
         let gnuplot_dir = tools.get("gnuplot").and_then(|tool| tool.parent());
         let (ok, output) = process::run(
             engine,
@@ -393,32 +457,61 @@ async fn compile(
 }
 pub async fn execute(job: Arc<Job>, tools: Arc<HashMap<String, PathBuf>>) {
     job.result.lock().await.state = "running".into();
-    for variant in &job.request.variants {
-        if job.cancel.load(Ordering::SeqCst) {
-            break;
-        }
-        let result = match compile(&job, variant, &tools).await {
-            Ok(result) => result,
-            Err(message) => VariantResult {
-                variant: variant.id.clone(),
-                ok: false,
-                artifact: None,
-                diagnostics: vec![Diagnostic {
-                    severity: "error".into(),
-                    message: message
-                        .lines()
-                        .next()
-                        .unwrap_or("Build fehlgeschlagen")
-                        .into(),
-                    file: job.request.main.clone(),
-                    line: None,
-                    column: None,
-                }],
-                log: message,
-            },
-        };
-        job.result.lock().await.results.push(result);
+    let count = job.request.variants.len();
+    let stages = Arc::new(Mutex::new(vec![String::new(); count]));
+    let permits = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(1)
+        .min(count.max(1));
+    let limit = Arc::new(tokio::sync::Semaphore::new(permits));
+    let mut tasks = tokio::task::JoinSet::new();
+    for index in 0..count {
+        let job = job.clone();
+        let tools = tools.clone();
+        let stages = stages.clone();
+        let limit = limit.clone();
+        tasks.spawn(async move {
+            if job.cancel.load(Ordering::SeqCst) {
+                return (index, None);
+            }
+            let Ok(_permit) = limit.acquire().await else {
+                return (index, None);
+            };
+            if job.cancel.load(Ordering::SeqCst) {
+                return (index, None);
+            }
+            let variant = &job.request.variants[index];
+            let result = match compile(&job, variant, &tools, &stages, index).await {
+                Ok(result) => result,
+                Err(message) => VariantResult {
+                    variant: variant.id.clone(),
+                    ok: false,
+                    artifact: None,
+                    diagnostics: vec![Diagnostic {
+                        severity: "error".into(),
+                        message: message
+                            .lines()
+                            .next()
+                            .unwrap_or("Build fehlgeschlagen")
+                            .into(),
+                        file: job.request.main.clone(),
+                        line: None,
+                        column: None,
+                    }],
+                    log: message,
+                },
+            };
+            report_progress(&job, &stages, index, String::new()).await;
+            (index, Some(result))
+        });
     }
+    let mut completed: Vec<Option<VariantResult>> = (0..count).map(|_| None).collect();
+    while let Some(finished) = tasks.join_next().await {
+        if let Ok((index, result)) = finished {
+            completed[index] = result;
+        }
+    }
+    job.result.lock().await.results = completed.into_iter().flatten().collect();
     let mut result = job.result.lock().await;
     result.state = if job.cancel.load(Ordering::SeqCst) {
         "cancelled"
@@ -610,6 +703,67 @@ mod tests {
 #[cfg(test)]
 mod engine_tests {
     use super::*;
+    async fn compile_once(
+        job: &Job,
+        variant: &Variant,
+        tools: &HashMap<String, PathBuf>,
+    ) -> Result<VariantResult, String> {
+        let stages = Mutex::new(vec![String::new()]);
+        compile(job, variant, tools, &stages, 0).await
+    }
+    #[tokio::test]
+    #[ignore = "Requires pdfLaTeX"]
+    async fn parallel_variants_keep_request_order_and_separate_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let tools = Arc::new(process::discover());
+        let mut job = job(temp.path(), "pdflatex", "parallel.tex", variants());
+        Arc::get_mut(&mut job).unwrap().request.preamble = Some("\\documentclass{article}".into());
+        std::fs::write(
+            job.root.join("input/parallel.tex"),
+            "\\ifSolutions Loesung\\else Aufgabe\\fi",
+        )
+        .unwrap();
+        execute(job.clone(), tools).await;
+        let result = job.result.lock().await.clone();
+        assert_eq!(result.state, "done");
+        assert_eq!(result.progress, "Fertig");
+        assert_eq!(result.results.len(), 2);
+        for (index, variant) in job.request.variants.iter().enumerate() {
+            assert_eq!(result.results[index].variant, variant.id);
+            assert!(result.results[index].ok, "{}", result.results[index].log);
+        }
+        let student = std::fs::read(checked_artifact(&job, "student", "pdf").unwrap()).unwrap();
+        let teacher = std::fs::read(checked_artifact(&job, "teacher", "pdf").unwrap()).unwrap();
+        assert_ne!(student, teacher);
+    }
+    #[tokio::test]
+    #[ignore = "Requires pdfLaTeX"]
+    async fn preamble_change_preserves_tool_caches() {
+        let temp = tempfile::tempdir().unwrap();
+        let tools = process::discover();
+        let mut job = job(
+            temp.path(),
+            "pdflatex",
+            "cache.tex",
+            variants().into_iter().take(1).collect(),
+        );
+        Arc::get_mut(&mut job).unwrap().request.preamble = Some("\\documentclass{article}".into());
+        std::fs::write(job.root.join("input/cache.tex"), "Text.").unwrap();
+        let variant = job.request.variants[0].clone();
+        assert!(compile_once(&job, &variant, &tools).await.unwrap().ok);
+        let run = job.root.join("runs/student");
+        std::fs::create_dir_all(run.join("cache/luatex-cache")).unwrap();
+        std::fs::write(run.join("cache/luatex-cache/fonts.luc"), "font cache").unwrap();
+        std::fs::write(run.join("out/stale.aux"), "veraltet").unwrap();
+        Arc::get_mut(&mut job).unwrap().request.preamble =
+            Some("\\documentclass[12pt]{article}".into());
+        assert!(compile_once(&job, &variant, &tools).await.unwrap().ok);
+        assert_eq!(
+            std::fs::read_to_string(run.join("cache/luatex-cache/fonts.luc")).unwrap(),
+            "font cache"
+        );
+        assert!(!run.join("out/stale.aux").exists());
+    }
     #[tokio::test]
     #[ignore = "Requires pdfLaTeX"]
     async fn shell_escape_is_enabled_only_for_opted_in_documents() {
@@ -626,11 +780,11 @@ mod engine_tests {
             "\\documentclass{article}\\begin{document}Test\\immediate\\write18{echo enabled > shell-marker.txt}\\end{document}",
         ).unwrap();
         let variant = job.request.variants[0].clone();
-        let result = compile(&job, &variant, &tools).await.unwrap();
+        let result = compile_once(&job, &variant, &tools).await.unwrap();
         assert!(result.ok, "{}", result.log);
         assert!(!job.root.join("runs/student/shell-marker.txt").exists());
         Arc::get_mut(&mut job).unwrap().request.shell_escape = true;
-        let result = compile(&job, &variant, &tools).await.unwrap();
+        let result = compile_once(&job, &variant, &tools).await.unwrap();
         assert!(result.ok, "{}", result.log);
         assert_eq!(
             std::fs::read_to_string(job.root.join("runs/student/shell-marker.txt"))
@@ -664,7 +818,7 @@ mod engine_tests {
             )
             .unwrap();
             let variant = &job.request.variants[0];
-            let result = compile(&job, variant, &tools).await.unwrap();
+            let result = compile_once(&job, variant, &tools).await.unwrap();
             assert!(result.ok, "{engine}: {}", result.log);
             let run = job.root.join("runs").join(&variant.id);
             assert!(run.join("out/result.pdf").is_file());
@@ -733,7 +887,7 @@ mod engine_tests {
         execute(job.clone(), tools.clone()).await;
         assert!(job.result.lock().await.results[0].ok);
         let variant = job.request.variants[0].clone();
-        let result = compile(&job, &variant, &tools).await.unwrap();
+        let result = compile_once(&job, &variant, &tools).await.unwrap();
         assert!(result.ok, "{}", result.log);
         assert!(job.result.lock().await.progress.ends_with("Durchlauf 1"));
         assert!(!result
@@ -742,7 +896,7 @@ mod engine_tests {
             .any(|d| d.message.contains("Rerun")));
         Arc::get_mut(&mut job).unwrap().request.preamble =
             Some("\\documentclass[12pt]{article}".into());
-        let result = compile(&job, &variant, &tools).await.unwrap();
+        let result = compile_once(&job, &variant, &tools).await.unwrap();
         assert!(result.ok, "{}", result.log);
         assert!(!job.result.lock().await.progress.ends_with("Durchlauf 1"));
     }

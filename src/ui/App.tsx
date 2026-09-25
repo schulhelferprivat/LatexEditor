@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import {
-  Bug,
   Bookmark,
   Bold,
   Check,
@@ -408,7 +407,9 @@ export function App() {
     <div className="application">
       <div className="document-bar">
         <div className="document-bar-start">
-          <span className="app-title">LatexHelper</span>
+          <span className="app-title">
+            LatexHelper<span className="app-version">(v{__APP_VERSION__})</span>
+          </span>
           <div className="file-actions">
             <button
               className="icon-button"
@@ -616,7 +617,7 @@ export function App() {
                   app.emit();
                 }}
               >
-                <Bug size={18} />
+                <span aria-hidden="true">🐛</span>
                 {state.diagnostics.length > 0 && (
                   <span className="count-pill">{state.diagnostics.length}</span>
                 )}
@@ -688,6 +689,7 @@ export function App() {
             changeSplit(((event.clientX - rect.left) / rect.width) * 100);
           }}
           onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+          onDoubleClick={() => changeSplit(50)}
         >
           <span />
         </div>

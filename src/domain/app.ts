@@ -76,6 +76,7 @@ export class AppController {
     language: localStorage.getItem('language') === 'en' ? 'en' : 'de',
   };
   private listeners = new Set<() => void>();
+  private jumpNonce = 0;
   private answer?: (value: number) => void;
   private job?: string;
   private buildingWorkspace?: string;
@@ -452,9 +453,21 @@ export class AppController {
       if (!d.file) {
         if (!(await this.saveDocument(d))) return;
       }
-      if (!d.dir) await this.attach(d);
-      if (!d.dir) return;
-      await files.permission(d.dir);
+      if (d.dir) {
+        await files.permission(d.dir);
+        if (d.configRaw === null) {
+          const loaded = await files.readConfig(d.dir, d.name);
+          if (loaded.raw !== null && JSON.stringify(d.config) === d.savedConfig) {
+            d.config = loaded.config;
+            d.savedConfig = JSON.stringify(loaded.config);
+            d.revision++;
+          }
+          d.configRaw = loaded.raw;
+        }
+      } else {
+        await this.attach(d);
+        if (!d.dir) return;
+      }
       const snapshot = await this.saveDocument(d);
       if (!snapshot) return;
       const preamble = this.state.preamble.enabled ? this.state.preamble.text : undefined;
@@ -512,7 +525,7 @@ export class AppController {
         this.state.status = result.progress;
         this.emit();
         if (result.state === 'running' || result.state === 'queued')
-          await new Promise((resolve) => setTimeout(resolve, 350));
+          await new Promise((resolve) => setTimeout(resolve, 120));
       } while (result.state === 'running' || result.state === 'queued');
       this.state.resultDocument = d.id;
       this.state.diagnostics = result.results.flatMap((r) => r.diagnostics);
@@ -604,18 +617,24 @@ export class AppController {
     const d = this.state.documents.find((doc) => doc.id === id);
     if (d && diagnostic.line && diagnostic.file === d.name) {
       this.state.active = id;
-      this.state.jump = { id, line: diagnostic.line, nonce: Date.now() };
+      this.state.jump = { id, line: diagnostic.line, nonce: ++this.jumpNonce };
       this.emit();
     }
   }
   async sync(location: SyncLocation) {
     const d = this.active;
-    if (!d?.preview || d.preview.revision !== d.revision) return;
+    if (!d?.preview || d.preview.revision !== d.revision) {
+      this.notify(new Error('Die Vorschau ist nicht aktuell. Bitte zuerst neu kompilieren.'));
+      return;
+    }
     const preview = d.preview;
     const result = await this.bridge.sync(preview.job, preview.variant, location);
     if (this.active?.id !== d.id || d.preview !== preview || preview.revision !== d.revision) return;
     const target = result[0];
-    if (!target) return;
+    if (!target) {
+      this.notify(new Error('Zu dieser Stelle im PDF gibt es keine Quelltextzeile.'));
+      return;
+    }
     if (target.line) {
       this.jump({ file: target.file ?? d.name, line: target.line, message: '', severity: 'warning' });
     } else {

@@ -3,6 +3,7 @@ import {
   EditorSelection,
   EditorState,
   Prec,
+  RangeSet,
   StateEffect,
   StateField,
   type Extension,
@@ -10,13 +11,14 @@ import {
 import {
   EditorView,
   Decoration,
+  GutterMarker,
   drawSelection,
+  gutterLineClass,
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
   rectangularSelection,
-  type DecorationSet,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from '@codemirror/commands';
 import {
@@ -95,23 +97,34 @@ const stops = StateField.define<{ from: number; to: number }[]>({
   },
 });
 const jumpHighlightEffect = StateEffect.define<number | null>();
-const jumpHighlight = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
+class JumpGutterMarker extends GutterMarker {
+  elementClass = 'cm-jump-highlight-gutter';
+  eq(other: GutterMarker) {
+    return other instanceof JumpGutterMarker;
+  }
+}
+const jumpGutterMarker = new JumpGutterMarker();
+const jumpLine = StateField.define<number | null>({
+  create: () => null,
   update(value, transaction) {
-    value = value.map(transaction.changes);
-    for (const effect of transaction.effects) {
-      if (effect.is(jumpHighlightEffect)) {
-        return effect.value === null
-          ? Decoration.none
-          : Decoration.set([
-              Decoration.line({ attributes: { class: 'cm-jump-highlight' } }).range(effect.value),
-            ]);
-      }
-    }
-    return value;
+    for (const effect of transaction.effects) if (effect.is(jumpHighlightEffect)) return effect.value;
+    if (value === null) return null;
+    return transaction.changes.mapPos(value, -1);
   },
-  provide: (field) => EditorView.decorations.from(field),
 });
+const jumpHighlight = [
+  jumpLine,
+  EditorView.decorations.compute([jumpLine], (state) => {
+    const position = state.field(jumpLine);
+    return position === null
+      ? Decoration.none
+      : Decoration.set([Decoration.line({ attributes: { class: 'cm-jump-highlight' } }).range(position)]);
+  }),
+  gutterLineClass.compute([jumpLine], (state) => {
+    const position = state.field(jumpLine);
+    return position === null ? RangeSet.empty : RangeSet.of([jumpGutterMarker.range(position)]);
+  }),
+];
 function nextStop(view: EditorView, direction: number) {
   const ranges = view.state.field(stops);
   if (!ranges.length) return false;
@@ -395,7 +408,7 @@ export class EditorAdapter {
           this.editable.of(EditorView.editable.of(true)),
           EditorView.theme(
             {
-              '&': { height: '100%', fontSize: '15px', backgroundColor: 'transparent', color: theme.text },
+              '&': { height: '100%', fontSize: '16px', backgroundColor: 'transparent', color: theme.text },
               '.cm-scroller': {
                 fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
                 lineHeight: '1.85',
@@ -525,11 +538,13 @@ export class EditorAdapter {
   jump(line: number) {
     const target = this.view.state.doc.line(Math.max(1, Math.min(line, this.view.state.doc.lines)));
     clearTimeout(this.jumpTimer);
+    this.view.requestMeasure();
     this.view.dispatch({
       selection: { anchor: target.from },
-      effects: [EditorView.scrollIntoView(target.from, { y: 'center' }), jumpHighlightEffect.of(target.from)],
+      effects: [jumpHighlightEffect.of(target.from)],
     });
-    this.jumpTimer = setTimeout(() => this.view.dispatch({ effects: jumpHighlightEffect.of(null) }), 1800);
+    this.view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: 'center' }) });
+    this.jumpTimer = setTimeout(() => this.view.dispatch({ effects: jumpHighlightEffect.of(null) }), 2500);
     this.view.focus();
   }
   get position() {

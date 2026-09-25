@@ -108,6 +108,7 @@ test('Meldungszeile springt zur Fehlerstelle, Kopieren bleibt separat', async ({
   await diagnostic.getByText('Unbekannter Befehl').click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.cm-jump-highlight')).toContainText('Hallo Welt');
+  await expect(page.locator('.cm-lineNumbers .cm-jump-highlight-gutter')).toHaveText('3');
 });
 test('Speichern, Entwurf, PDF-Zoom, Final-Export und Wiederöffnung', async ({ page }) => {
   await files(page);
@@ -279,6 +280,8 @@ test('Speichern, Entwurf, PDF-Zoom, Final-Export und Wiederöffnung', async ({ p
   await expect
     .poll(() => requests.filter((request) => request.includes('/sync/')).length)
     .toBe(syncBefore + 1);
+  await expect(page.locator('.cm-jump-highlight')).toContainText('Hallo Welt');
+  await expect(page.locator('.cm-lineNumbers .cm-jump-highlight-gutter')).toHaveText('3');
   await page.mouse.click(paper.x + 5, paper.y + 5, { button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Kopieren', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');

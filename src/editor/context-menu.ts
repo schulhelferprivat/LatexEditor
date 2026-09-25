@@ -1,6 +1,9 @@
 import type { EditorView } from '@codemirror/view';
 import { lineComment, lineUncomment } from '@codemirror/commands';
 
+const wordPattern = /^\p{L}[\p{L}\p{M}]*(?:['’\-][\p{L}\p{M}]+)*$/u;
+const wordScan = /\p{L}[\p{L}\p{M}]*(?:['’\-][\p{L}\p{M}]+)*/gu;
+
 export class EditorContextMenu {
   private menu = document.createElement('div');
   private previousFocus?: HTMLElement;
@@ -56,7 +59,11 @@ export class EditorContextMenu {
     this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     const selection = this.view.state.selection.main;
     const text = this.view.state.sliceDoc(selection.from, selection.to);
-    const word = /^\p{L}[\p{L}\p{M}]*(?:['’\-][\p{L}\p{M}]+)*$/u.test(text) ? text : undefined;
+    const word = text
+      ? wordPattern.test(text)
+        ? text
+        : undefined
+      : this.wordAt(this.view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? selection.head);
     const copy = document.createElement('button');
     copy.textContent = 'Kopieren';
     copy.disabled = !text;
@@ -118,6 +125,16 @@ export class EditorContextMenu {
     this.menu.style.top = `${Math.max(0, Math.min(event.clientY, window.innerHeight - rect.height))}px`;
     buttons.find((button) => !button.disabled)?.focus({ preventScroll: true });
   };
+  private wordAt(position: number) {
+    const line = this.view.state.doc.lineAt(position);
+    const offset = position - line.from;
+    wordScan.lastIndex = 0;
+    for (const match of line.text.matchAll(wordScan)) {
+      const start = match.index ?? 0;
+      if (offset >= start && offset <= start + match[0].length) return match[0];
+    }
+    return undefined;
+  }
   destroy() {
     this.close();
     this.menu.remove();

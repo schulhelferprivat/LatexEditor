@@ -81,6 +81,7 @@ beforeEach(() => {
   fs.permission.mockResolvedValue(undefined);
   fs.write.mockResolvedValue(undefined);
   fs.lastDocument.mockResolvedValue(undefined);
+  fs.readConfig.mockResolvedValue({ config: defaultConfig(), raw: null });
   Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
 });
 describe('Explizites Speichern', () => {
@@ -249,6 +250,61 @@ describe('Build-Grenzen', () => {
     expect(sequence).toEqual(['save', 'upload', 'build']);
     expect(upload).toHaveBeenCalledOnce();
     expect(dirty(doc)).toBe(true);
+  });
+  it('erneuert die Freigabe des gemerkten Ordners ohne Auswahldialog', async () => {
+    const doc = document();
+    doc.dir = { resolve: async () => [doc.name] } as unknown as FileSystemDirectoryHandle;
+    const app = controller(doc);
+    const showDirectoryPicker = vi.fn(async () => {
+      throw new Error('Der Ordner darf nicht erneut ausgewählt werden.');
+    });
+    Object.assign(window, { showDirectoryPicker });
+    const build = vi.spyOn(app.bridge, 'build').mockResolvedValue({ id: 'job' });
+    vi.spyOn(app.bridge, 'workspace').mockResolvedValue({ id: 'workspace' });
+    vi.spyOn(app.bridge, 'upload').mockResolvedValue(undefined);
+    vi.spyOn(app.bridge, 'status').mockResolvedValue({
+      id: 'job',
+      state: 'done',
+      progress: 'Fertig',
+      results: [],
+    });
+    vi.spyOn(app.bridge, 'release').mockResolvedValue({});
+    fs.collectFiles.mockResolvedValue([{ path: doc.name, file: new File([doc.text], doc.name) }]);
+    await app.build('draft');
+    expect(showDirectoryPicker).not.toHaveBeenCalled();
+    expect(fs.permission).toHaveBeenCalledWith(doc.dir);
+    expect(build).toHaveBeenCalled();
+  });
+  it('übernimmt gespeicherte Varianten nach erneuter Freigabe ohne Rückfrage', async () => {
+    const doc = document();
+    doc.dir = { resolve: async () => [doc.name] } as unknown as FileSystemDirectoryHandle;
+    const stored = simplifyConfig({ ...defaultConfig(), engine: 'xelatex', shellEscape: false });
+    const raw = JSON.stringify(stored, null, 2) + '\n';
+    fs.readConfig.mockResolvedValueOnce({ config: stored, raw });
+    fs.optionalText.mockResolvedValueOnce(raw);
+    const app = controller(doc);
+    vi.mocked(app.bridge.connect).mockResolvedValue({
+      version: '1',
+      engines: ['lualatex', 'xelatex'],
+      tools: ['xelatex'],
+    });
+    const ask = vi.spyOn(app, 'ask').mockResolvedValue(0);
+    vi.spyOn(app.bridge, 'workspace').mockResolvedValue({ id: 'workspace' });
+    vi.spyOn(app.bridge, 'upload').mockResolvedValue(undefined);
+    vi.spyOn(app.bridge, 'build').mockResolvedValue({ id: 'job' });
+    vi.spyOn(app.bridge, 'status').mockResolvedValue({
+      id: 'job',
+      state: 'done',
+      progress: 'Fertig',
+      results: [],
+    });
+    vi.spyOn(app.bridge, 'release').mockResolvedValue({});
+    fs.collectFiles.mockResolvedValue([{ path: doc.name, file: new File([doc.text], doc.name) }]);
+    await app.build('draft');
+    expect(ask).not.toHaveBeenCalled();
+    expect(doc.config.engine).toBe('xelatex');
+    expect(doc.config.shellEscape).toBe(false);
+    expect(fs.write.mock.calls.map(([handle]) => handle.name)).not.toContain('main.latexapp.json');
   });
 });
 describe('Endversion', () => {

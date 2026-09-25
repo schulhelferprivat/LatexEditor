@@ -10,7 +10,7 @@
   background: var(--bg);
   font-synthesis: none;
   font-weight: 400;
-  font-size: 15px;
+  font-size: 16px;
   color-scheme: dark;
   --bg: #0f141c;
   --bg-app: #111825;
@@ -31,6 +31,8 @@
   --danger: #ef8f88;
   --focus: #5aa9f0;
   --sans: Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --scroll-thumb: #5d6b8255;
+  --scroll-thumb-hover: #5d6b8299;
 }
 * {
   box-sizing: border-box;
@@ -164,8 +166,8 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 29px;
-  height: 29px;
+  width: 32px;
+  height: 32px;
   border-radius: 4px;
   color: var(--text-dim);
 }
@@ -198,6 +200,17 @@ code {
   display: flex;
   min-width: 0;
 }
+@media (display-mode: window-controls-overlay) {
+  .document-bar {
+    height: max(64px, env(titlebar-area-height, 64px));
+    padding-right: calc(100% - env(titlebar-area-width, 100%) - env(titlebar-area-x, 0px));
+    padding-left: env(titlebar-area-x, 0px);
+  }
+  .app-title {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+}
 .app-title {
   display: flex;
   align-items: center;
@@ -209,6 +222,12 @@ code {
   white-space: nowrap;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
+}
+.app-version {
+  margin-left: 4px;
+  font-size: 0.75em;
+  font-weight: 400;
+  opacity: 0.6;
 }
 .tabs {
   display: flex;
@@ -260,8 +279,8 @@ code {
   white-space: nowrap;
 }
 .dirty-dot {
-  height: 5px;
-  width: 5px;
+  height: 6px;
+  width: 6px;
   background: var(--warn);
   border-radius: 50%;
   flex-shrink: 0;
@@ -283,8 +302,8 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 5px;
   color: var(--muted);
   transition:
@@ -296,8 +315,8 @@ code {
   color: var(--accent);
 }
 .cm-fold-toggle svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
 }
 .cm-editor .cm-lineNumbers .cm-gutterElement:not(.cm-fold-gap-gutter) {
   padding: 0;
@@ -313,8 +332,8 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 5px;
@@ -331,7 +350,7 @@ code {
   color: var(--on-accent);
 }
 .cm-fold-gap-spacer {
-  height: 18px;
+  height: 20px;
 }
 .file-actions {
   display: flex;
@@ -348,8 +367,8 @@ code {
 }
 .header-action {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -424,8 +443,8 @@ code {
   cursor: default;
 }
 .tab-build-controls .header-action {
-  width: 60px;
-  height: 52px;
+  width: 66px;
+  height: 56px;
   border-radius: 8px;
   font-size: 2.1rem;
 }
@@ -473,8 +492,8 @@ code {
 }
 .count-pill {
   display: inline-flex;
-  min-width: 17px;
-  height: 17px;
+  min-width: 18px;
+  height: 18px;
   align-items: center;
   justify-content: center;
   background: #ffffff08;
@@ -487,7 +506,7 @@ code {
 .toolbar-rule {
   display: block;
   width: 1px;
-  height: 14px;
+  height: 15px;
   background: #ffffff0b;
   margin: 0 5px;
   flex-shrink: 0;
@@ -567,7 +586,7 @@ code {
   flex: 0 0 auto;
 }
 .snippet-menu-trigger {
-  height: 29px;
+  height: 32px;
   border: 1px solid transparent;
   border-radius: 4px;
   color: var(--muted);
@@ -626,7 +645,7 @@ code {
   margin-left: 4px;
 }
 .gap-snippet-icon {
-  width: 42px;
+  width: 46px;
   color: var(--muted);
   font-family: monospace;
   font-size: 9px;
@@ -680,8 +699,8 @@ code {
 }
 .splitter span {
   width: 2px;
-  height: 34px;
-  background: #5d6b8255;
+  height: 37px;
+  background: var(--scroll-thumb);
   border-radius: 3px;
 }
 .pdf-pane {
@@ -699,8 +718,8 @@ code {
   top: 14px;
   right: 16px;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 35px;
+  height: 35px;
   place-items: center;
   padding: 0;
   border: 1px solid #ffffff1b;
@@ -722,8 +741,36 @@ code {
   overflow: auto;
   position: relative;
   padding: 24px 32px;
+}
+.pdf-scroll,
+.cm-editor .cm-scroller {
   scrollbar-width: thin;
-  scrollbar-color: #5d6b8255 transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+.pdf-scroll::-webkit-scrollbar,
+.cm-editor .cm-scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.pdf-scroll::-webkit-scrollbar-track,
+.cm-editor .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pdf-scroll::-webkit-scrollbar-thumb,
+.cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
+}
+.pdf-scroll::-webkit-scrollbar-thumb:hover,
+.cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+  background-clip: padding-box;
+}
+.pdf-scroll::-webkit-scrollbar-corner,
+.cm-editor .cm-scroller::-webkit-scrollbar-corner {
+  background: transparent;
 }
 .pdf-page {
   user-select: none;
@@ -779,8 +826,8 @@ code {
 }
 .pdf-marker {
   position: absolute;
-  height: 16px;
-  width: 16px;
+  height: 18px;
+  width: 18px;
   border: 2px solid var(--accent);
   border-radius: 50%;
   background: #5aa9f055;
@@ -796,7 +843,7 @@ code {
   font-variant-numeric: tabular-nums;
 }
 .pdf-actions .icon-button {
-  width: 26px;
+  width: 29px;
 }
 .stale {
   color: var(--warn);
@@ -957,8 +1004,8 @@ code {
   right: 6px;
   display: grid;
   place-items: center;
-  width: 25px;
-  height: 25px;
+  width: 28px;
+  height: 28px;
 }
 .diagnostic-copy:hover,
 .diagnostic-copy:focus-visible {
@@ -1071,7 +1118,7 @@ code {
 }
 .define-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr) 26px;
+  grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr) 29px;
   gap: 7px;
   margin-bottom: 8px;
 }
@@ -1234,7 +1281,13 @@ code {
 .cm-jump-highlight {
   background: #5aa9f033;
   box-shadow: inset 3px 0 0 var(--accent);
-  animation: jump-highlight 1.8s ease-out;
+  animation: jump-highlight 2.5s ease-out;
+}
+.cm-lineNumbers .cm-gutterElement.cm-jump-highlight-gutter {
+  background: #5aa9f033;
+  color: var(--text);
+  font-weight: 600;
+  animation: jump-highlight 2.5s ease-out;
 }
 @keyframes jump-highlight {
   0%,
@@ -1245,36 +1298,28 @@ code {
     background: #5aa9f010;
   }
 }
-.cm-search input {
-  background: var(--panel-sunken);
-  color: var(--text);
-  border: 1px solid #5aa9f033;
-}
-.cm-button {
-  background: var(--accent-quiet) !important;
-  color: var(--text) !important;
-  border: 1px solid #5aa9f033 !important;
-}
 .cm-hidden-search-panel {
   display: none;
 }
 .search-bar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 8px 18px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.search-bar > .icon-button,
+.search-bar > .toolbar-rule {
+  flex-shrink: 0;
 }
-.search-field {
-  flex: 0 1 320px;
-  min-width: 0;
+.search-bar > .search-field {
+  flex: 1 1 180px;
+  min-width: 120px;
+  max-width: 280px;
   padding: 7px 10px;
   font-size: 0.9333rem;
 }
@@ -1284,21 +1329,13 @@ code {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   min-width: 74px;
+  flex-shrink: 0;
 }
-.search-toggles {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.search-toggles .icon-button.pressed {
+.search-bar .icon-button.pressed {
   background: var(--accent-quiet);
   color: var(--text);
 }
-.search-bar .button.subtle {
-  font-size: 0.8667rem;
-  border-color: #ffffff15;
-}
-.search-row > .search-close {
+.search-bar > .search-close {
   margin-left: auto;
 }
 .cm-lintRange-info {
@@ -1341,7 +1378,7 @@ code {
     padding: 0 12px;
   }
   .editor-actions .icon-button {
-    width: 24px;
+    width: 26px;
   }
   .welcome {
     padding: 32px 9%;
@@ -1360,6 +1397,10 @@ code {
   }
   .cm-fold-toggle {
     transition: none;
+  }
+  .cm-jump-highlight,
+  .cm-lineNumbers .cm-gutterElement.cm-jump-highlight-gutter {
+    animation: none;
   }
 }
 @media (max-height: 720px) {
