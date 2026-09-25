@@ -1,0 +1,8 @@
+node_modules
+dist
+public/dictionaries
+public/licenses
+public/pdf
+bridge/target
+vendor
+package-lock.json

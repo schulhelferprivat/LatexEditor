@@ -1,0 +1,34 @@
+name: Native TeX integration
+on:
+  workflow_dispatch:
+jobs:
+  engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: r-lib/actions/setup-tinytex@v2
+      - run: tlmgr install synctex biblatex biber collection-latexrecommended collection-fontsrecommended tkz-fct tkz-base pgf
+      - if: runner.os == 'Windows'
+        run: choco install gnuplot --yes --no-progress
+      - if: runner.os == 'macOS'
+        run: brew install gnuplot
+      - run: cargo test --manifest-path bridge/Cargo.toml --locked -- --ignored --nocapture
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: cargo build --manifest-path bridge/Cargo.toml --locked
+      - run: npx playwright install chromium
+      - run: npm run test:production
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-${{ matrix.os }}
+          path: test-results/

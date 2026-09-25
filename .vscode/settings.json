@@ -1,0 +1,10 @@
+{
+  "liveServer.settings.root": "/dist",
+  "liveServer.settings.host": "localhost",
+  "liveServer.settings.port": 5500,
+  "liveServer.settings.proxy": {
+    "enable": true,
+    "baseUri": "/api",
+    "proxyUri": "http://localhost:38471/api"
+  }
+}

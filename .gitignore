@@ -1,0 +1,11 @@
+node_modules/
+dist/
+bridge/target/
+playwright-report/
+test-results/
+.tools/
+public/dictionaries/
+public/pdf/
+public/licenses/
+*.tsbuildinfo
+release/

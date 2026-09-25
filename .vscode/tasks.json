@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Build",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$source = '${workspaceFolder}'; $project = (& wsl.exe wslpath -w $source | Out-String).Trim(); if (-not $project) { throw 'Projektpfad konnte nicht ermittelt werden.' }; & wsl.exe bash -lc \"source ~/.nvm/nvm.sh && cd '$source' && npm run build\"; if ($LASTEXITCODE -ne 0) { throw 'Frontend-Build fehlgeschlagen.' }; $runningBridge = Get-Process -Name latexhelper-bridge -ErrorAction SilentlyContinue; if ($runningBridge) { $runningBridge | Stop-Process -Force; Start-Sleep -Milliseconds 500 }; $target = Join-Path $env:LOCALAPPDATA 'LatexHelper\\target'; cargo build --manifest-path \"$project\\bridge\\Cargo.toml\" --target-dir $target --release --locked; if ($LASTEXITCODE -ne 0) { throw 'Bridge-Build fehlgeschlagen.' }; $env:LATEXHELPER_DIST = \"$project\\dist\"; Start-Process \"$target\\release\\latexhelper-bridge.exe\"; Start-Sleep -Seconds 2; Start-Process \"http://localhost:38471/?reload=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())\"; Start-Sleep -Seconds 2; $keyboard = New-Object -ComObject WScript.Shell; $keyboard.SendKeys('^{F5}'); exit 0"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true,
+        "close": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

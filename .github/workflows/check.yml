@@ -1,0 +1,62 @@
+name: Checks and native packages
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: npm ci
+      - run: npm run check
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - run: cargo fmt --manifest-path bridge/Cargo.toml --check
+      - run: cargo test --manifest-path bridge/Cargo.toml --locked
+      - run: node scripts/rust-licenses.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm audit --omit=dev --audit-level=moderate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: test-results/
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: cargo test --manifest-path bridge/Cargo.toml --locked
+      - name: Install Windows packaging compiler
+        if: runner.os == 'Windows'
+        run: choco install innosetup --yes --no-progress
+      - run: npm run package
+        env:
+          LATEXHELPER_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LatexHelper-${{ matrix.os }}-unsigned
+          path: |
+            release/*.exe
+            release/*.dmg

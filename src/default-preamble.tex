@@ -1,0 +1,436 @@
+\newcommand{\DoNotLoadEpstopdf}{}
+\documentclass[a4paper]{scrartcl}
+\usepackage{fontspec}
+\usepackage[ngerman]{babel}
+\usepackage{rotating}
+\usepackage{geometry}
+\usepackage[table]{xcolor}
+\usepackage{mathtools}
+\usepackage{caption}
+\usepackage{amssymb}
+\usepackage{pifont}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{varwidth}
+\usepackage{enumitem}
+\usepackage{soul}
+\usepackage{array}
+\usepackage{zref-lastpage}
+\usepackage{wasysym}
+\usepackage{wrapfig2}
+\usepackage[headsepline=1pt]{scrlayer-scrpage}
+\usepackage{xstring}
+\usepackage{xspace}
+\usepackage{extarrows}
+\usepackage[export]{adjustbox}
+\usepackage{ifthen}
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage{framed}
+\usepackage{lineno}
+\usepackage{siunitx}
+\usepackage[thicklines]{cancel}
+\usepackage{vectorlogos}
+\usepackage{tasks}\DeclareInstance{tasks}{alphabetize}{default}{ label = (\alph*),label-offset=1em}
+\settasks{label-width=1.5em}
+\usepackage{nicefrac}
+\usepackage{changepage}
+\usepackage{tabularray}
+\usepackage{setspace}
+\usepackage{tcolorbox}\tcbuselibrary{skins,raster}
+\usepackage{makecell}
+\usepackage{interval}\intervalconfig{separator symbol =;}
+\usepackage{tikz}
+\usetikzlibrary{calc,tikzmark,decorations.text,shapes,patterns.meta,fit,shadows.blur}
+\usepackage{tikz-qtree}
+\usepackage{tikz-3dplot}
+\usepackage{tkz-fct}\tkzfctset{tan style/.style={-}}
+\usepackage{tkz-euclide}
+\usepackage{colonequals}
+\usepackage{fancyqr}
+\usepackage{etoolbox}
+\usepackage{marginnote}
+\usepackage{relsize}
+\usepackage{calculator}
+\usepackage[hidelinks]{hyperref}
+
+\geometry{left=2cm,right=2cm,top=2cm,bottom=2cm}
+\setsansfont{Latin Modern Sans}
+\renewcommand{\familydefault}{\sfdefault}
+\parindent 0pt
+\pagestyle{scrheadings}
+\renewcommand*{\headfont}{\normalfont}
+\cfoot{}
+
+\theoremstyle{plain}
+\newtheorem{Satz}{Satz}
+\theoremstyle{definition}
+\newtheorem{Aufgabe}{Aufgabe}
+\newtheorem{Definition}{Definition}
+\let\origgrqq\grqq
+\renewcommand{\grqq}{\origgrqq\xspace}
+\let\origflqq\flqq
+\renewcommand{\flqq}{\origflqq\xspace}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\blau}[1]{\textcolor{blue}{#1}}
+\newcommand{\pink}[1]{\textcolor{magenta}{#1}}
+\newcommand{\rot}[1]{\textcolor{red}{#1}}
+\newcommand{\orange}[1]{\textcolor{orange}{#1}}
+\newcommand{\gelb}[1]{\textcolor{yellow}{#1}}
+\newcommand{\gruen}[1]{\textcolor{green}{#1}}
+\newcommand{\cyan}[1]{\textcolor{cyan}{#1}}
+\newcommand{\braun}[1]{\textcolor{brown}{#1}}
+\newcommand{\violett}[1]{\textcolor{violet}{#1}}
+\newcommand{\schwarz}[1]{\textcolor{black}{#1}}
+\newcommand*\centermathcell[1]{\omit\hfil$\displaystyle#1$\hfil\ignorespaces}
+\NewDocumentCommand{\dx}{o}{\,\mathrm{d}\IfNoValueTF{#1}{x}{#1}}
+\renewcommand{\labelenumi}{({\roman{enumi}})}
+\renewcommand{\theenumi}{({\roman{enumi}})}
+\renewcommand{\labelitemi}{\textendash}
+\newcommand{\dotted}[1]{%
+	\tikz[baseline=(todotted.base)]{
+		\node[inner sep=0pt,outer sep=2pt] (todotted) {#1};
+		\draw[dotted] (todotted.south west) -- (todotted.south east);
+	}%
+}%
+
+\newcommand\Overline[2][1pt]{%
+	\begin{tikzpicture}[baseline=(a.base)]
+		\node[inner xsep=0pt,inner ysep=2pt] (a) {$#2$};
+		\draw[line width= #1] (a.north west) -- (a.north east);
+	\end{tikzpicture}
+}
+
+\NewDocumentCommand{\qrRand}{O{1.75cm} m O{} O{0pt}}{%
+	\setlength\marginparsep{#4}%
+	\marginnote{%
+		\centering
+		\href{#2}{%
+			\IfSubStr{#2}{geogebra}{%
+				\fancyqr[color=black,height=#1,
+				image={\scalebox{1.5}{\vectorlogo[icon]{geogebra}}},
+				image padding=0]{#2}%
+			}{%
+				\fancyqr[color=black,height=#1,image padding=0]{#2}%
+			}%
+		}%
+		\ifstrempty{#3}{}{%
+			\\[2pt]%
+			\begin{tikzpicture}
+				\node[draw,thick,rounded corners=10pt,
+				minimum width=#1,minimum height=.75cm,
+				inner sep=2pt,align=center]{%
+					\adjustbox{max width=\dimexpr#1-4pt\relax,
+						max height=\dimexpr.75cm-4pt\relax}{\texttt{#3}}%
+				};
+			\end{tikzpicture}%
+		}%
+	}%
+}
+
+\makeatletter
+\newcommand{\discardpages}[1]{%
+	\xdef\discard@pages{\zap@space#1 \@empty}%
+	\AtBeginShipout{%
+		\@expandtwoargs\in@{,\the\c@page,}{,\discard@pages,}%
+		\ifin@\AtBeginShipoutDiscard\fi
+	}%
+}
+\newcommand{\keeppages}[1]{%
+	\xdef\keep@pages{\zap@space#1 \@empty}%
+	\AtBeginShipout{%
+		\@expandtwoargs\in@{,\the\c@page,}{,\keep@pages,}%
+		\ifin@\else\AtBeginShipoutDiscard\fi
+	}%
+}
+\def\ifGm@preamble#1{\@firstofone}
+\appto\restoregeometry{%
+	\ifLuaTeX
+		\pagewidth=\paperwidth
+		\pageheight=\paperheight
+	\else
+		\pdfpagewidth=\paperwidth
+		\pdfpageheight=\paperheight
+	\fi}
+\apptocmd\newgeometry{%
+	\ifLuaTeX
+		\pagewidth=\paperwidth
+		\pageheight=\paperheight
+	\else
+		\pdfpagewidth=\paperwidth
+		\pdfpageheight=\paperheight
+	\fi}{}{}
+\makeatother
+
+\newcolumntype{M}[1]{>{\centering\arraybackslash}m{#1}}
+
+\makeatletter
+\newcommand{\LastPageNumber}{%
+	\zref@extractdefault{LastPage}{abspage}{1}%
+}
+\makeatother
+
+\newcommand{\seitenzahl}{~%
+	\ifnum\LastPageNumber=1\relax
+	\else
+	(\thepage/\LastPageNumber)%
+	\fi
+}
+\newcommand{\hilfe}{\textit{Gar keine Idee? $\to$ Hilfekarte}}
+\newcounter{tippcounter}
+\newcounter{tippcounterdone}
+\newcommand{\tipp}{\stepcounter{tippcounter}\textit{Hilfe? $\to$ Tipp\thetippcounter~unten}}
+\newcommand{\tipptext}[1]{\vspace*{\fill}\hrule\vspace*{0.1cm}
+	\begin{sideways}\begin{sideways}
+			\begin{minipage}{\textwidth}\footnotesize\stepcounter{tippcounterdone}		
+				\textit{Tipp\thetippcounterdone:}~#1
+			\end{minipage}
+	\end{sideways}\end{sideways}
+}
+\newboolean{loesung}
+\setboolean{loesung}{false}
+
+\newdimen\lsgHoehe
+\newdimen\lsgBreite
+\newdimen\lsgVorhoehe
+\newbox\lsgVorbox
+
+\makeatletter
+\NewDocumentEnvironment{lsg}{O{0cm} O{0pt} g +b}{%
+	\let\lsg\lsg@short
+	\par
+	\lsgVorhoehe=0pt
+	\IfNoValueTF{#3}{%
+		\ifx\height\fb@frh
+			\endgroup\egroup
+			\lsgVorhoehe=\dimexpr\ht\@tempboxa+\dp\@tempboxa+\height\relax
+			\setbox\lsgVorbox=\box\@tempboxa
+			\setbox\@tempboxa\vbox\bgroup
+			\advance\hsize-\width\FrameRestore
+			\textwidth\hsize
+			\columnwidth\hsize
+			\unvbox\lsgVorbox
+			\begingroup\def\@currenvir{lsg}%
+		\fi
+		\lsgBreite=\dimexpr\linewidth-#1\relax
+		\ifdim\pagegoal=\maxdimen
+			\lsgHoehe=\dimexpr\textheight-#2-\lsgVorhoehe\relax
+		\else
+			\lsgHoehe=\dimexpr\pagegoal-\pagetotal-#2-\lsgVorhoehe\relax
+		\fi
+		\@tempdima=\dimexpr\textheight-#2-\lsgVorhoehe\relax
+		\ifdim\lsgHoehe>\@tempdima\lsgHoehe=\@tempdima\fi
+		\ifdim\lsgHoehe<0pt\lsgHoehe=0pt\fi
+	}{%
+		\lsgBreite=\dimexpr\linewidth-#1\relax
+		\lsgHoehe=#3\relax
+	}%
+	\noindent
+	\hspace*{#1}%
+	\parbox[t][\lsgHoehe][t]{\lsgBreite}{%
+		\ifthenelse{\boolean{loesung}}{%
+			\settasks{label-format=\color{red},item-format=\color{red}}%
+			\color{red}#4%
+		}{%
+			\strut
+		}%
+		\vfill
+	}%
+	\par
+}{}
+\let\lsg@environment\lsg
+\NewDocumentCommand{\lsg@short}{m O{}}{%
+	\ifthenelse{\boolean{loesung}}%
+	{\textcolor{red}{#1}}%
+	{#2}%
+}
+\let\lsg\lsg@short
+\AddToHook{env/lsg/begin}{\let\lsg\lsg@environment}
+\makeatother
+
+\newcommand\colorxcancel[2][black]{\renewcommand\CancelColor{\color{#1}}\xcancel{#2}}
+\newcommand{\janein}[2]{\begin{tikzpicture}[baseline]\bfseries
+		\draw (0,0) rectangle node[pos=.5] {\scriptsize \ifthenelse{\boolean{loesung}}{\ifthenelse{\equal{#2}{W}}{\colorxcancel[red]{\textcolor{black}{W}}}{\textcolor{black}{W}}}{\textcolor{black}{W}}} (#1,#1);
+		\draw (#1+0.1,0) rectangle node[pos=.5] {\scriptsize \ifthenelse{\boolean{loesung}}{\ifthenelse{\equal{#2}{F}}{\colorxcancel[red]{\textcolor{black}{F}}}{\textcolor{black}{F}}}{\textcolor{black}{F}}} (2*#1+0.1,#1);
+		\end{tikzpicture}}
+
+\newif\ifintask
+\newcount\liniertcount
+\newcount\liniertFrageZeilen
+\newdimen\liniertRest
+\newdimen\liniertH
+\newdimen\liniertTaskRest
+
+\ExplSyntaxOn
+\cs_new_eq:NN \liniertTaskAlt:nnn \__tasks_task:nnn
+\cs_set_protected:Npn \__tasks_task:nnn #1#2#3
+{
+    \global\liniertTaskRest=
+        \ifdim\pagegoal=\maxdimen
+            \textheight
+        \else
+            \dimexpr\pagegoal-\pagetotal\relax
+        \fi
+    \intasktrue
+    \liniertTaskAlt:nnn{#1}{#2}{#3}
+    \intaskfalse
+}
+\ExplSyntaxOff
+
+\NewDocumentCommand{\liniert}{o +g}{%
+    \begingroup
+    \par
+    \liniertFrageZeilen=\prevgraf
+    \vspace{.9\baselineskip}%
+    \noindent
+    \IfNoValueTF{#1}{%
+        \liniertRest=
+        \ifintask
+            \liniertTaskRest
+        \else
+            \ifdim\pagegoal=\maxdimen
+                \textheight
+            \else
+                \dimexpr\pagegoal-\pagetotal\relax
+            \fi
+        \fi
+        \ifintask
+            \dimen0=\baselineskip
+            \multiply\dimen0 by\liniertFrageZeilen
+            \advance\liniertRest by-\dimen0
+            \advance\liniertRest by-.9\baselineskip
+        \fi
+        \liniertcount=0
+        \ifdim\liniertRest>\baselineskip
+            \advance\liniertcount by1
+            \advance\liniertRest by-\baselineskip
+            \loop
+                \ifdim\liniertRest>1.9\baselineskip
+                    \advance\liniertcount by1
+                    \advance\liniertRest by-1.9\baselineskip
+            \repeat
+        \fi
+    }{%
+        \liniertcount=#1\relax
+    }%
+    \ifnum\liniertcount<1
+        \liniertcount=1
+    \fi
+    \liniertH=1.9\baselineskip
+    \multiply\liniertH by\liniertcount
+    \def\L{%
+        \loop
+            \ifnum\liniertcount>0
+                \rule{\linewidth}{.6pt}%
+                \par
+                \vspace{.9\baselineskip}%
+                \advance\liniertcount by-1
+        \repeat
+    }%
+    \IfNoValueTF{#2}{%
+        \L
+    }{%
+        \ifthenelse{\boolean{loesung}}{%
+            \setlength{\fboxsep}{8pt}%
+            \noindent
+            \fbox{%
+                \parbox[t]
+                    [\dimexpr\liniertH-2\fboxsep-2\fboxrule\relax]
+                    [t]
+                    {\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+                    {%
+                        \settasks{
+                            label-format=\color{red},
+                            item-format=\color{red}
+                        }%
+                        \color{red}#2%
+                    }%
+            }%
+            \par
+        }{%
+            \L
+        }%
+    }%
+    \endgroup
+}
+
+\newlength{\laengeluecke}
+\newlength{\lueckebreite}
+\newcounter{lueckencounter}
+\newcommand{\luecke}[1]{%
+	\begingroup\stepcounter{lueckencounter}%
+	\setbox0=\hbox{\strut #1}\setlength{\laengeluecke}{\wd0}%
+	\setlength{\lueckebreite}{2\laengeluecke}\ifdim\lueckebreite<1cm\setlength{\lueckebreite}{1cm}\fi
+	\def\LueckeInhalt{\dotted{\ifthenelse{\boolean{loesung}}{%
+				\makebox[\lueckebreite][c]{\strut{\color{red}#1}}%
+			}{%
+				\TextField[bordercolor={},backgroundcolor={},color=black,align=1,width=\lueckebreite,name=Luecke\thelueckencounter,value={}]{}%
+	}}}%
+	\ifmmode\hbox{\LueckeInhalt}\else\LueckeInhalt\fi\endgroup
+}
+
+\newcommand{\squareX}[1]{%
+	\makebox[0pt][l]{\raisebox{.05cm}{\ensuremath{%
+				\ifthenelse{\boolean{loesung}\AND\equal{#1}{W}}{\color{red}\boldsymbol{\times}}{}%
+	}}}%
+	\scalebox{1.15}{\ensuremath{\square}}%
+}
+
+\def\vektor#1{\left(\vcenter{\halign{\hfil$##$\hfil\cr \vektorA#1,,}}\right)}
+\def\vektorA#1,{\if,#1,\else #1\cr \expandafter \vektorA \fi}
+\ExplSyntaxOn
+\NewDocumentCommand\punkt{m}{
+	\left(
+	\clist_use:nn{\;#1\;}{\;\middle|\;}
+	\right)}
+\ExplSyntaxOff
+
+\tikzset{schnipselcard/.style={draw=black!35,fill={rgb,255:red,255;green,249;blue,196},rounded corners=2mm,line width=.4pt,blur shadow,inner sep=4mm,outer sep=0pt}}
+\ExplSyntaxOn
+\seq_new:N\g__s_seq \box_new:N\l__s_i \box_new:N\l__s_r
+\dim_new:N\l__s_w \dim_new:N\l__s_g \dim_new:N\l__s_gap
+\NewDocumentCommand{\schnipselzeile}{+m}{\seq_gput_right:Nn\g__s_seq{#1}}
+\cs_new_protected:Npn\__s_mk:n#1{\ifthenelse{\boolean{loesung}}{\hbox_set:Nn\l__s_i{\tikz[baseline]{\node[schnipselcard]{\begingroup\def\[{ \(\displaystyle }\def\]{ \)}\begin{varwidth}{.85\linewidth}\centering#1\end{varwidth}\endgroup};}}}{\pgfmathrandominteger{\A}{-20}{20}\hbox_set:Nn\l__s_i{\rotatebox[origin=c]{\A}{\tikz[baseline]{\node[schnipselcard]{\begingroup\def\[{ \(\displaystyle }\def\]{ \)}\begin{varwidth}{.85\linewidth}\centering#1\end{varwidth}\endgroup};}}}}}
+\cs_new_protected:Npn\__s_flush:{\dim_compare:nNnF{\l__s_w}={0pt}{\par\noindent\hbox to\linewidth{\hss\box_use:N\l__s_r\hss}\par\vskip\l__s_gap\hbox_set:Nn\l__s_r{}\dim_zero:N\l__s_w}}
+\NewDocumentEnvironment{schnipsel}{O{12345} O{1}}
+{\seq_gclear:N\g__s_seq}
+{\pgfmathsetseed{#1}\sys_gset_rand_seed:n{#1}\dim_set:Nn\l__s_gap{\fp_to_dim:n{4*(#2)}}\hbox_set:Nn\l__s_r{}\dim_zero:N\l__s_w
+	\ifthenelse{\boolean{loesung}}
+	{\seq_map_inline:Nn\g__s_seq{\__s_mk:n{##1}\par\noindent\hbox to\linewidth{\hss\box_use:N\l__s_i\hss}\par\vskip\l__s_gap}}
+	{\seq_gshuffle:N\g__s_seq\seq_map_inline:Nn\g__s_seq{\__s_mk:n{##1}\dim_set:Nn\l_tmpa_dim{\box_wd:N\l__s_i}\dim_set:Nn\l__s_g{\dim_compare:nNnTF{\l__s_w}={0pt}{0pt}{\l__s_gap}}\dim_compare:nNnT{\l__s_w+\l__s_g+\l_tmpa_dim}>\linewidth{\__s_flush:\dim_zero:N\l__s_g}\hbox_set:Nn\l__s_r{\tex_unhbox:D\l__s_r\kern\l__s_g\vtop{\box_use:N\l__s_i}}\dim_set:Nn\l__s_w{\l__s_w+\l__s_g+\l_tmpa_dim}}\__s_flush:}}
+\ExplSyntaxOff
+
+\NewDocumentCommand{\hilfsmittelfrei}{O{1}}{%
+	\ensuremath{\vcenter{\hbox{\hilfsmittelfreiTikz[#1]}}}%
+}
+\NewDocumentCommand{\hilfsmittelfreiTikz}{O{1}}{%
+	\tikz[x=1ex,y=1ex,scale=#1,line cap=round,line join=round]{%
+		\draw[gray,line width=0.08ex,rounded corners=0.25ex](0,0)rectangle(1.8,2.8);
+		\draw[gray,line width=0.06ex,rounded corners=0.15ex](0.25,2.05)rectangle(1.55,2.55);
+		\foreach\x in{0.45,0.90,1.35}{\foreach\y in{0.45,0.90,1.35}{\fill[gray](\x,\y)circle(0.10);}}
+		\draw[gray,line width=0.18ex](-0.25,-0.25)--(2.05,3.05)(-0.25,3.05)--(2.05,-0.25);
+	}%
+}
+
+\NewDocumentCommand{\differenzierung}{m}{%
+	\tikz[baseline=-0.6ex]{
+		\ifcase#1
+		\or
+		\draw (0,0) circle (0.8ex);
+		\or
+		\draw (0,0) circle (0.8ex);
+		\fill (0,0) -- (180:0.8ex) arc (180:360:0.8ex) -- cycle;
+		\or
+		\fill (0,0) circle (0.8ex);
+		\fi
+	}%
+}
+
+\newcounter{besumme}\newcommand{\BE}[1]{\IfSubStr{#1}{BE:}{\StrBehind{#1}{BE:}[\x]\IfSubStr{\x}{,}{\StrBefore{\x}{,}[\x]}{}\addtocounter{besumme}{\numexpr\x\relax}}{}}\makeatletter\newcommand{\BESumme}{\@ifundefined{gespeicherteBESumme}{0}{\gespeicherteBESumme}}
+\AtEndDocument{\immediate\write\@auxout{\string\gdef\string\gespeicherteBESumme{\arabic{besumme}}}}\makeatother
+\let\AufgabeAlt\Aufgabe\let\endAufgabeAlt\endAufgabe\RenewDocumentEnvironment{Aufgabe}{O{}}{\BE{#1}\AufgabeAlt[#1]}{\endAufgabeAlt}
+
+\Form
