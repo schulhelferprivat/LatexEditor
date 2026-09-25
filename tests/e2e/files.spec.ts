@@ -352,6 +352,9 @@ test('Speichern, Entwurf, PDF-Zoom, Final-Export und Wiederöffnung', async ({ p
   });
   const compile = page.getByRole('button', { name: 'Kompilieren' });
   const compileSize = await compile.boundingBox();
+  const statusRequested = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === '/api/v1/builds/job',
+  );
   await compile.click();
   await expect(page.getByRole('radio', { name: 'Entwurf' })).toBeDisabled();
   await expect(page.getByRole('radio', { name: 'Endversion' })).toBeDisabled();
@@ -361,10 +364,11 @@ test('Speichern, Entwurf, PDF-Zoom, Final-Export und Wiederöffnung', async ({ p
   const progressSize = await progress.boundingBox();
   expect(progressSize?.width).toBe(compileSize?.width);
   expect(progressSize?.height).toBe(compileSize?.height);
+  await statusRequested;
   await progress.click();
+  await expect.poll(() => requests).toContain('POST /api/v1/builds/job/cancel');
   releaseStatus();
   await expect(page.getByRole('button', { name: 'Kompilieren' })).toBeVisible();
-  expect(requests).toContain('POST /api/v1/builds/job/cancel');
   const beforeSwitch = (await text.boundingBox())!;
   await page.mouse.move(beforeSwitch.x + 5, beforeSwitch.y + 5);
   await page.mouse.down();
