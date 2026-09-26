@@ -75,8 +75,11 @@ export function InstallPrompts() {
     );
   if (!installOpen) return null;
   return (
-    <Dialog title="LatexHelper als App installieren" onCancel={dismissInstall}>
-      <p className="question-message">Installiere den LatexHelper als App.</p>
+    <Dialog title="Als App installieren" onCancel={dismissInstall}>
+      <p className="question-message">
+        Als installierte App startet LatexHelper in einem eigenen Fenster – ohne Adresszeile und
+        Browser-Tabs.
+      </p>
       <p className="muted">
         Falls der Button unten nicht funktioniert, nutze das Symbol rechts in der Adresszeile.
       </p>

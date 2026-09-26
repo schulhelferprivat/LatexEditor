@@ -1111,37 +1111,48 @@ code {
 }
 .dialog-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 4px;
 }
 .dialog-title h2 {
+  margin: 0;
   font-family: Georgia, serif;
   font-weight: 400;
-  font-size: 1.9231rem;
-  letter-spacing: -0.5px;
+  font-size: 1.5385rem;
+  line-height: 1.35;
+  letter-spacing: -0.3px;
+  text-wrap: balance;
+}
+.dialog-title .icon-button {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 .dialog-intro {
   color: var(--muted);
   font-size: 0.9231rem;
-  line-height: 1.8;
-  margin-bottom: 25px;
+  line-height: 1.7;
+  margin: 14px 0 22px;
 }
 .question-message {
   font-size: 1rem;
-  line-height: 1.9;
+  line-height: 1.65;
   white-space: pre-line;
-  margin: 25px 0;
+  margin: 18px 0 0;
   color: var(--text-dim);
+}
+.question-message + .muted {
+  margin: 10px 0 0;
 }
 .dialog-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 9px;
-  margin-top: 25px;
-  padding-top: 20px;
+  margin-top: 22px;
+  padding-top: 18px;
   border-top: 1px solid #ffffff0a;
 }
 .dialog-footer > .muted,
