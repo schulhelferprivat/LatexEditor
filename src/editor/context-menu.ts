@@ -90,7 +90,7 @@ export class EditorContextMenu {
       const to = this.view.state.doc.lineAt(selection.to).to;
       const region = this.view.state.sliceDoc(from, to);
       const leading = /^[\t ]*/.exec(region)?.[0] ?? '';
-      const baseIndent = Math.floor(leading.replace(/\t/g, '  ').length / 2);
+      const baseIndent = leading.replace(/ {1,2}/g, '\t').length;
       const insert = cleanLatex(region, baseIndent);
       if (insert !== region) this.view.dispatch({ changes: { from, to, insert }, userEvent: 'format' });
       this.view.focus();

@@ -1,14 +1,9 @@
 import { rawEnvironments } from './latex';
 
-const indentUnit = '  ';
-const tabWidth = 2;
+const indentUnit = '\t';
+const flatEnvironments = new Set(['document']);
 const beginPattern = /^\\begin\{([^}]*)\}/;
 const endPattern = /^\\end\{([^}]*)\}/;
-
-function expandTabs(line: string) {
-  const leading = /^[\t ]*/.exec(line)?.[0] ?? '';
-  return leading.replace(/\t/g, ' '.repeat(tabWidth)) + line.slice(leading.length);
-}
 
 export function cleanLatex(source: string, baseIndent = 0): string {
   const result: string[] = [];
@@ -24,17 +19,18 @@ export function cleanLatex(source: string, baseIndent = 0): string {
       }
       continue;
     }
-    const content = expandTabs(original).trim();
+    const content = original.trim();
     if (!content) {
       blank++;
       continue;
     }
     if (blank && result.length) result.push('');
     blank = 0;
-    if (endPattern.test(content)) level = Math.max(0, level - 1);
+    const ended = endPattern.exec(content)?.[1];
+    if (ended !== undefined && !flatEnvironments.has(ended)) level = Math.max(0, level - 1);
     result.push(indentUnit.repeat(baseIndent + level) + content);
     const begun = beginPattern.exec(content)?.[1];
-    if (begun !== undefined) {
+    if (begun !== undefined && !flatEnvironments.has(begun)) {
       level++;
       if (rawEnvironments.has(begun)) raw = begun;
     }

@@ -57,15 +57,17 @@ export function SpellBar({
   useEffect(() => {
     if (index !== safeIndex) setIndex(safeIndex);
   }, [index, safeIndex]);
+  useEffect(() => {
+    if (current) editor?.revealSpellIssue(current);
+    else editor?.clearSpellFocus();
+  }, [editor, current?.from, current?.to]);
   const position = useMemo(
     () => (issues.length ? `${safeIndex + 1} von ${issues.length}` : 'Keine Funde'),
     [safeIndex, issues.length],
   );
   function go(step: number) {
     if (!issues.length) return;
-    const next = nextIssueIndex(safeIndex, step, issues.length);
-    setIndex(next);
-    editor?.revealSpellIssue(issues[next]);
+    setIndex(nextIssueIndex(safeIndex, step, issues.length));
   }
   function replace(suggestion: string) {
     if (!current || !editor) return;
@@ -78,6 +80,7 @@ export function SpellBar({
     setIssues(editor.spellIssues());
   }
   function close() {
+    editor?.clearSpellFocus();
     onClose();
     editor?.focus();
   }

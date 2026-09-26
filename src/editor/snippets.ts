@@ -31,13 +31,13 @@ export const snippets: Snippet[] = [
     id: 'list',
     label: 'Aufzählung',
     icon: 'List',
-    parts: ['\\begin{itemize}\n  \\item ', argument('Eintrag', true), '\n\\end{itemize}'],
+    parts: ['\\begin{itemize}\n\t\\item ', argument('Eintrag', true), '\n\\end{itemize}'],
   },
   {
     id: 'numbered',
     label: 'Nummerierte Liste',
     icon: 'NumberedList',
-    parts: ['\\begin{enumerate}\n  \\item ', argument('Eintrag', true), '\n\\end{enumerate}'],
+    parts: ['\\begin{enumerate}\n\t\\item ', argument('Eintrag', true), '\n\\end{enumerate}'],
   },
   {
     id: 'tasks',
@@ -45,9 +45,9 @@ export const snippets: Snippet[] = [
     icon: 'AlphabeticalTasks',
     buttonText: 'Task',
     parts: [
-      '\\begin{tasks}[after-item-skip=.5cm](1)\n  \\task ',
+      '\\begin{tasks}[after-item-skip=.5cm](1)\n\t\\task ',
       argument('', true),
-      '\n  \\task \n\\end{tasks}',
+      '\n\t\\task \n\\end{tasks}',
     ],
   },
   {
@@ -274,11 +274,11 @@ export const snippets: Snippet[] = [
     label: 'Abbildung',
     icon: 'Image',
     parts: [
-      '\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=\\linewidth]{',
+      '\\begin{figure}[htbp]\n\t\\centering\n\t\\includegraphics[width=\\linewidth]{',
       argument('bild.pdf'),
-      '}\n  \\caption{',
+      '}\n\t\\caption{',
       argument('Beschreibung', true),
-      '}\n  \\label{',
+      '}\n\t\\label{',
       argument('fig:bild'),
       '}\n\\end{figure}',
     ],
@@ -365,7 +365,7 @@ export function insertSnippet(source: string, from: number, to: number, snippet:
       const item = snippet.id === 'tasks' ? '\\task' : '\\item';
       value = selection
         .split('\n')
-        .map((line, index) => (index ? `  ${item} ${line}` : line))
+        .map((line, index) => (index ? `\t${item} ${line}` : line))
         .join('\n');
     }
     const start = text.length;

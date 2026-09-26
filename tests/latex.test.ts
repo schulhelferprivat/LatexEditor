@@ -60,7 +60,7 @@ describe('Snippets', () => {
     expect(edit.stops).toHaveLength(3);
   });
   it('behandelt eine mehrzeilige Auswahl als Listeneinträge', () => {
-    expect(insertSnippet('eins\nzwei', 0, 9, snippet('list')).text).toContain('\\item eins\n  \\item zwei');
+    expect(insertSnippet('eins\nzwei', 0, 9, snippet('list')).text).toContain('\\item eins\n\t\\item zwei');
   });
   it('fügt Mathematik im Text und abgesetzt ein', () => {
     expect(insertSnippet('x^2', 0, 3, snippet('math')).text).toBe('\\(x^2\\)');
@@ -68,7 +68,7 @@ describe('Snippets', () => {
   });
   it('erstellt Tasks mit Abstand zwischen den Aufgaben', () => {
     const result = insertSnippet('', 0, 0, snippet('tasks')).text;
-    expect(result).toBe('\\begin{tasks}[after-item-skip=.5cm](1)\n  \\task \n  \\task \n\\end{tasks}');
+    expect(result).toBe('\\begin{tasks}[after-item-skip=.5cm](1)\n\t\\task \n\t\\task \n\\end{tasks}');
   });
   it('erstellt eine Aufgabe mit Lösungsrahmen', () => {
     const result = insertSnippet('', 0, 0, snippet('exercise')).text;
@@ -281,7 +281,7 @@ describe('Automatische Umgebungsvervollständigung', () => {
     const { completeEnvironment } = await import('../src/editor/latex');
     const source = '\\begin{itemize';
     const result = completeEnvironment(source, source.length, source.length);
-    expect(result?.insert).toBe('}\n  \n\\end{itemize}');
+    expect(result?.insert).toBe('}\n\t\n\\end{itemize}');
   });
   it('vermeidet doppelte End-Partner und Klammern', async () => {
     const { completeEnvironment } = await import('../src/editor/latex');

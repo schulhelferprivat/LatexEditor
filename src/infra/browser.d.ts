@@ -1,5 +1,4 @@
 declare const __APP_VERSION__: string;
-declare const __APP_BUILD__: string;
 interface FileSystemHandle {
   queryPermission(options?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
   requestPermission(options?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;

@@ -327,6 +327,6 @@ export function completeEnvironment(source: string, from: number, to: number) {
   if (balance <= 0) return;
   const line = prefix.slice(prefix.lastIndexOf('\n') + 1);
   const indent = /^\s*/.exec(line)?.[0] ?? '';
-  const insert = `}\n${indent}  \n${indent}\\end{${name}}`;
-  return { from, to, insert, anchor: from + indent.length + 4 };
+  const insert = `}\n${indent}\t\n${indent}\\end{${name}}`;
+  return { from, to, insert, anchor: from + indent.length + 3 };
 }

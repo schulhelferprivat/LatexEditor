@@ -364,7 +364,7 @@ export class PdfViewer {
     this.targetTimer = setTimeout(() => {
       this.target = undefined;
       this.hideMarkers();
-    }, 3000);
+    }, 6000);
   }
   private hideMarkers() {
     for (const slot of this.pages) {

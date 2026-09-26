@@ -2,21 +2,56 @@ import { describe, expect, it } from 'vitest';
 import { cleanLatex } from '../src/editor/format';
 
 describe('Codebereinigung', () => {
-  it('rückt verschachtelte Umgebungen mit zwei Leerzeichen je Ebene ein', () => {
-    const source = String.raw`\begin{itemize}
-\item Erster Punkt
-\begin{enumerate}
-\item Innen
-\end{enumerate}
-\end{itemize}`;
+  it('rückt verschachtelte Umgebungen mit einem Tabulator je Ebene ein', () => {
+    const source = [
+      '\\begin{itemize}',
+      '\\item Erster Punkt',
+      '\\begin{enumerate}',
+      '\\item Innen',
+      '\\end{enumerate}',
+      '\\end{itemize}',
+    ].join('\n');
 
     expect(cleanLatex(source)).toBe(
-      String.raw`\begin{itemize}
-  \item Erster Punkt
-  \begin{enumerate}
-    \item Innen
-  \end{enumerate}
-\end{itemize}`,
+      [
+        '\\begin{itemize}',
+        '\t\\item Erster Punkt',
+        '\t\\begin{enumerate}',
+        '\t\t\\item Innen',
+        '\t\\end{enumerate}',
+        '\\end{itemize}',
+      ].join('\n'),
+    );
+  });
+
+  it('rückt den Dokumentrumpf nicht ein', () => {
+    const source = [
+      '\\documentclass{article}',
+      '\\begin{document}',
+      'Text',
+      '\\begin{itemize}',
+      '\\item Eins',
+      '\\end{itemize}',
+      '\\end{document}',
+    ].join('\n');
+
+    expect(cleanLatex(source)).toBe(source.replace('\\item Eins', '\t\\item Eins'));
+  });
+
+  it('rückt den Dokumentrumpf auch bei vorhandener Einrückung aus', () => {
+    const source = [
+      '\\begin{document}',
+      '    Text',
+      '        \\begin{center}',
+      '            Mitte',
+      '        \\end{center}',
+      '\\end{document}',
+    ].join('\n');
+
+    expect(cleanLatex(source)).toBe(
+      ['\\begin{document}', 'Text', '\\begin{center}', '\tMitte', '\\end{center}', '\\end{document}'].join(
+        '\n',
+      ),
     );
   });
 
@@ -29,7 +64,7 @@ describe('Codebereinigung', () => {
     ].join('\n');
 
     expect(cleanLatex(source)).toBe(
-      ['\\begin{itemize}', '  \\item Erster Punkt', '\\end{itemize}', 'Normaler Text'].join('\n'),
+      ['\\begin{itemize}', '\t\\item Erster Punkt', '\\end{itemize}', 'Normaler Text'].join('\n'),
     );
   });
 
@@ -42,9 +77,9 @@ describe('Codebereinigung', () => {
     expect(cleanLatex('Eins\n\nZwei')).toBe('Eins\n\nZwei');
   });
 
-  it('wandelt führende Tabs in Leerzeichen um', () => {
-    expect(cleanLatex('\t\\begin{center}\n\t\tText\n\t\\end{center}')).toBe(
-      '\\begin{center}\n  Text\n\\end{center}',
+  it('normalisiert gemischte Einrückung aus Tabs und Leerzeichen', () => {
+    expect(cleanLatex('\t\\begin{center}\n    \tText\n  \t\\end{center}')).toBe(
+      '\\begin{center}\n\tText\n\\end{center}',
     );
   });
 
@@ -70,11 +105,11 @@ describe('Codebereinigung', () => {
     expect(cleanLatex(source)).toBe(
       [
         '\\begin{itemize}',
-        '  \\begin{lstlisting}',
+        '\t\\begin{lstlisting}',
         '    def f():',
         '        return 1',
         '\\end{lstlisting}',
-        '  \\item Danach',
+        '\t\\item Danach',
         '\\end{itemize}',
       ].join('\n'),
     );
@@ -86,13 +121,13 @@ describe('Codebereinigung', () => {
 
   it('verschiebt das Ergebnis um die Grundeinrückung', () => {
     expect(cleanLatex('\\begin{center}\nText\n\\end{center}', 2)).toBe(
-      '    \\begin{center}\n      Text\n    \\end{center}',
+      '\t\t\\begin{center}\n\t\t\tText\n\t\t\\end{center}',
     );
   });
 
   it('verändert Kommentarzeilen nur in der Einrückung', () => {
     expect(cleanLatex('\\begin{center}\n      % \\begin{itemize}   \n\\end{center}')).toBe(
-      '\\begin{center}\n  % \\begin{itemize}\n\\end{center}',
+      '\\begin{center}\n\t% \\begin{itemize}\n\\end{center}',
     );
   });
 });

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
 
-const read = (file: string) => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+const read = async (file: string) =>
+  (await readFile(new URL(`../${file}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 describe('single source of truth for the version', () => {
   it('keeps VERSION in MAJOR.MINOR.PATCH form', async () => {
@@ -22,7 +23,7 @@ describe('single source of truth for the version', () => {
     expect(script).toContain('/DAppVersion=${version}');
   });
 
-  it('derives the shown version from VERSION, not from the commit count', async () => {
-    expect(await read('vite.config.ts')).toContain('__APP_VERSION__: JSON.stringify(appVersion())');
+  it('shows the commit count as the version, not VERSION', async () => {
+    expect(await read('vite.config.ts')).toContain('__APP_VERSION__: JSON.stringify(commitCount())');
   });
 });

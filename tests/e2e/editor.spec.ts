@@ -143,8 +143,8 @@ test('bereinigt markierten LaTeX-Code über das Kontextmenü', async ({ page }) 
   await menu.getByRole('menuitem', { name: 'Codebereinigung' }).click();
   await expect(lines).toHaveText([
     '\\begin{itemize}',
-    '  \\item Erster Punkt',
-    '  \\item Zweiter Punkt',
+    '\t\\item Erster Punkt',
+    '\t\\item Zweiter Punkt',
     '\\end{itemize}',
   ]);
   await page.keyboard.press('ControlOrMeta+z');

@@ -250,14 +250,10 @@ function Lines({ size = 16 }: { size?: number }) {
 function SnippetCards({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1.3" y="3.6" width="8.6" height="10.1" rx="1.3" stroke="currentColor" strokeWidth="1.2" />
-      <path
-        d="M4.9 2.3h8.5c.7 0 1.3.6 1.3 1.3v8.1"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <path d="M3.7 7.1h3.8M3.7 10.2h2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      <rect x="5.3" y="1.5" width="8.2" height="9.8" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M7.2 4.4h4.4M7.2 6.3h4.4M7.2 8.2h2.9" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
+      <rect x="2.5" y="4.7" width="8.2" height="9.8" rx="1.3" fill="var(--panel-raised)" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M4.4 7.6h4.4M4.4 9.5h4.4M4.4 11.4h2.9" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
     </svg>
   );
 }
@@ -431,10 +427,7 @@ export function App() {
       <div className="document-bar">
         <div className="document-bar-start">
           <span className="app-title">
-            LatexHelper
-            <span className="app-version">
-              (v{__APP_VERSION__} · {__APP_BUILD__})
-            </span>
+            LatexHelper<span className="app-version">(v{__APP_VERSION__})</span>
           </span>
           <div className="file-actions">
             <button

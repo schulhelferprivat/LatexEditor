@@ -27,6 +27,7 @@ import {
   foldKeymap,
   foldService,
   indentOnInput,
+  indentUnit,
   syntaxHighlighting,
   HighlightStyle,
 } from '@codemirror/language';
@@ -56,6 +57,14 @@ import { completeEnvironment, environmentAt, environments } from './latex';
 import { environmentFoldRangeAtLine, environmentFoldRanges, type EnvironmentFoldRange } from './folding';
 import { FoldTransitions, foldGapNumbers, foldGapWidgets, visualFoldGutter } from './fold-ui';
 import { insertMenuSnippet, insertSnippet, snippets, type Snippet } from './snippets';
+import {
+  commandBoost,
+  documentVocabulary,
+  environmentBoost,
+  preferredCommands,
+  preferredEnvironments,
+} from './vocabulary';
+import { mathDelimiterEdit } from './delimiters';
 import { EditorContextMenu } from './context-menu';
 import type { SpellResponse, SpellRequest } from '../spell/worker';
 
@@ -125,6 +134,25 @@ const jumpHighlight = [
     return position === null ? RangeSet.empty : RangeSet.of([jumpGutterMarker.range(position)]);
   }),
 ];
+const spellFocusEffect = StateEffect.define<{ from: number; to: number } | null>();
+const spellFocusRange = StateField.define<{ from: number; to: number } | null>({
+  create: () => null,
+  update(value, transaction) {
+    for (const effect of transaction.effects) if (effect.is(spellFocusEffect)) return effect.value;
+    if (value === null) return null;
+    if (transaction.docChanged) return null;
+    return value;
+  },
+});
+const spellFocusMark = Decoration.mark({ class: 'cm-spell-focus' });
+const spellFocus = [
+  spellFocusRange,
+  EditorView.decorations.compute([spellFocusRange], (state) => {
+    const range = state.field(spellFocusRange);
+    if (!range || range.from >= range.to || range.to > state.doc.length) return Decoration.none;
+    return Decoration.set([spellFocusMark.range(range.from, range.to)]);
+  }),
+];
 function nextStop(view: EditorView, direction: number) {
   const ranges = view.state.field(stops);
   if (!ranges.length) return false;
@@ -142,7 +170,7 @@ function nextStop(view: EditorView, direction: number) {
   });
   return true;
 }
-const commands = [
+const commands: [string, string][] = [
   ['documentclass', 'Dokumentklasse'],
   ['usepackage', 'Paket laden'],
   ['begin', 'Umgebung beginnen'],
@@ -177,20 +205,24 @@ const commands = [
   ['href', 'Link'],
 ];
 function completions(context: CompletionContext) {
-  const prefix = context.state.doc.sliceString(0, context.pos);
+  const source = context.state.doc.toString();
+  const vocabulary = documentVocabulary(source);
+  const prefix = source.slice(0, context.pos);
   const env = /\\(begin|end)\{([A-Za-z*]*)$/.exec(prefix);
   if (env) {
+    const known = [...environments, ...preferredEnvironments, ...vocabulary.environments];
     const names =
       env[1] === 'end'
-        ? [environmentAt(prefix.slice(0, env.index), env.index), ...environments].filter(
+        ? [environmentAt(prefix.slice(0, env.index), env.index), ...known].filter(
             (name): name is string => !!name,
           )
-        : environments;
+        : known;
     return {
       from: context.pos - env[2].length,
       options: [...new Set(names)].map((name) => ({
         label: name,
         type: 'type',
+        boost: environmentBoost(name, vocabulary),
         apply: (view: EditorView, _completion: unknown, from: number, to: number) => {
           const source = view.state.doc.toString();
           const prefix = source.slice(0, from) + name;
@@ -216,7 +248,7 @@ function completions(context: CompletionContext) {
   }
   const reference = /\\(?:ref|eqref|pageref)\{([^}]*)$/.exec(prefix);
   if (reference) {
-    const labels = [...context.state.doc.toString().matchAll(/\\label\{([^}]+)\}/g)].map((match) => match[1]);
+    const labels = [...source.matchAll(/\\label\{([^}]+)\}/g)].map((match) => match[1]);
     return {
       from: context.pos - reference[1].length,
       options: [...new Set(labels)].map((label) => ({ label, type: 'constant' })),
@@ -224,12 +256,15 @@ function completions(context: CompletionContext) {
   }
   const word = context.matchBefore(/\\[A-Za-z]*/);
   if (!word) return null;
+  const details = new Map(commands);
+  const names = [...new Set([...details.keys(), ...preferredCommands, ...vocabulary.commands])];
   return {
     from: word.from,
-    options: commands.map(([name, detail]) => ({
+    options: names.map((name) => ({
       label: `\\${name}`,
-      detail,
+      detail: details.get(name),
       type: 'function',
+      boost: commandBoost(name, vocabulary),
       apply: (view: EditorView, _completion: unknown, from: number, to: number) => {
         const snippet = snippets.find(
           (s) => typeof s.parts[0] === 'string' && s.parts[0].startsWith(`\\${name}{`),
@@ -251,6 +286,21 @@ function completions(context: CompletionContext) {
     })),
   };
 }
+const mathDelimiters = Prec.highest(
+  EditorView.inputHandler.of((view, from, to, text) => {
+    const edit = mathDelimiterEdit(view.state.doc.toString(), from, to, text);
+    if (!edit) return false;
+    view.dispatch({
+      changes: { from, to, insert: edit.insert },
+      selection: { anchor: edit.anchor },
+      userEvent: 'input.type',
+    });
+    return true;
+  }),
+);
+const closeBracketConfig = EditorState.languageData.of(() => [
+  { closeBrackets: { brackets: ['(', '[', '{', '$'] } },
+]);
 const environmentCompletion = Prec.highest(
   EditorView.inputHandler.of((view, from, to, text) => {
     if (text !== '}') return false;
@@ -373,6 +423,7 @@ export class EditorAdapter {
           history(),
           drawSelection(),
           rectangularSelection(),
+          indentUnit.of('\t'),
           indentOnInput(),
           bracketMatching(),
           closeBrackets(),
@@ -384,7 +435,10 @@ export class EditorAdapter {
           environmentFolds,
           environmentFoldService,
           jumpHighlight,
+          spellFocus,
           environmentCompletion,
+          mathDelimiters,
+          closeBracketConfig,
           autocompletion({ override: [completions] }),
           search({
             createPanel: () => {
@@ -631,9 +685,15 @@ export class EditorAdapter {
     if (issue.to > this.view.state.doc.length) return;
     this.view.dispatch({
       selection: { anchor: issue.from, head: issue.to },
-      effects: [EditorView.scrollIntoView(issue.from, { y: 'center' })],
+      effects: [
+        EditorView.scrollIntoView(issue.from, { y: 'center' }),
+        spellFocusEffect.of({ from: issue.from, to: issue.to }),
+      ],
     });
     this.view.focus();
+  }
+  clearSpellFocus() {
+    this.view.dispatch({ effects: spellFocusEffect.of(null) });
   }
   replaceSpellIssue(issue: SpellingIssue, replacement: string) {
     if (issue.to > this.view.state.doc.length) return;
