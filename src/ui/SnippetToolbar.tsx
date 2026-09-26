@@ -125,7 +125,7 @@ export function SnippetToolbar({ active, documentId, icons, onInsert }: SnippetT
                       {group.showIcons !== false && (
                         <span className="snippet-menu-item-icon">
                           {snippet.id === 'gap' ? (
-                            <span className="gap-snippet-icon">AB....CD</span>
+                            <span className="gap-snippet-icon">X...Y</span>
                           ) : (
                             <Icon size={16} />
                           )}

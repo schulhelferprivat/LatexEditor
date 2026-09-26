@@ -7,10 +7,13 @@
 #ifndef OutputDir
 #define OutputDir "..\\..\\release"
 #endif
+#ifndef AppVersion
+#error AppVersion is required
+#endif
 [Setup]
 AppId={{E9D39251-8F61-4DA6-A830-67E0585A8CA1}
 AppName=LatexHelper Bridge
-AppVersion=0.1.0
+AppVersion={#AppVersion}
 AppPublisher=LatexHelper
 DefaultDirName={localappdata}\Programs\LatexHelper Bridge
 DefaultGroupName=LatexHelper

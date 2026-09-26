@@ -143,14 +143,20 @@ function NotebookPresentation({ size = 16 }: { size?: number }) {
 }
 function CoordinateSystem({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg width={size * 1.375} height={size} viewBox="0 0 22 16" fill="none" aria-hidden="true">
       <path
-        d="M2 8h12M8 14V2M14 8l-2-2M14 8l-2 2M8 2 6 4M8 2l2 2"
+        d="M0.5 9h13.5M6.5 15.5V1.5M14 9l-2-2M14 9l-2 2M6.5 1.5l-2 2M6.5 1.5l2 2"
         stroke="currentColor"
         strokeWidth="1.25"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <text x="16.3" y="11.8" fill="currentColor" fontFamily="monospace" fontSize="6.5" fontStyle="italic">
+        x
+      </text>
+      <text x="8.6" y="6.8" fill="currentColor" fontFamily="monospace" fontSize="6.5" fontStyle="italic">
+        y
+      </text>
     </svg>
   );
 }
@@ -208,8 +214,8 @@ function Interval({ size = 16 }: { size?: number }) {
 function Equivalence({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      <text x="0.5" y="11.5" fill="currentColor" fontSize="12" fontWeight="600" textAnchor="start">
-        =
+      <text x="0.5" y="11.5" fill="currentColor" fontSize="11" fontWeight="600" textAnchor="start">
+        {'\u21d4'}
       </text>
     </svg>
   );
@@ -219,7 +225,7 @@ function Checkmark({ size = 16 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="m2.6 8.6 3.5 3.6 7.3-8.4"
-        stroke="#3fa65a"
+        stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -241,51 +247,15 @@ function Lines({ size = 16 }: { size?: number }) {
 }
 function SnippetCards({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 1.5} height={size} viewBox="0 0 24 16" fill="none" aria-hidden="true">
-      <g transform="rotate(-14 5.4 8.3)">
-        <rect
-          x="1.3"
-          y="3.4"
-          width="8.2"
-          height="9.8"
-          rx="1.6"
-          fill="#fff4c2"
-          stroke="#b6a978"
-          strokeWidth="0.65"
-        />
-        <path d="M3.2 7.4h4.3M3.8 9h3.1" stroke="#594d36" strokeWidth="0.75" strokeLinecap="round" />
-      </g>
-      <g transform="rotate(13 18.5 8.1)">
-        <rect
-          x="14.7"
-          y="3.2"
-          width="7.6"
-          height="9.8"
-          rx="1.6"
-          fill="#fff4c2"
-          stroke="#b6a978"
-          strokeWidth="0.65"
-        />
-        <path d="M16.4 7.3h4.2M17 9h3" stroke="#594d36" strokeWidth="0.75" strokeLinecap="round" />
-      </g>
-      <g transform="rotate(6 11.9 7.7)">
-        <rect
-          x="7.5"
-          y="2.3"
-          width="8.8"
-          height="10.8"
-          rx="1.6"
-          fill="#fff4c2"
-          stroke="#b6a978"
-          strokeWidth="0.65"
-        />
-        <path
-          d="M9.5 6.7h4.8M10.3 8.3h3.4M9.8 10h4.3"
-          stroke="#594d36"
-          strokeWidth="0.75"
-          strokeLinecap="round"
-        />
-      </g>
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.3" y="3.6" width="8.6" height="10.1" rx="1.3" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M4.9 2.3h8.5c.7 0 1.3.6 1.3 1.3v8.1"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path d="M3.7 7.1h3.8M3.7 10.2h2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   );
 }
@@ -337,20 +307,19 @@ function SingleChoice({ size = 16 }: { size?: number }) {
       <rect x="0.65" y="0.65" width="14.7" height="14.7" stroke="currentColor" strokeWidth="1.3" />
       <rect x="20.65" y="0.65" width="14.7" height="14.7" stroke="currentColor" strokeWidth="1.3" />
       <path
-        d="m3.3 4.4 1.9 7.5 2.8-5.6 2.8 5.6 1.9-7.5"
+        d="m4.9 4.6 1.4 6.8 1.7-5 1.7 5 1.4-6.8"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M24.85 11.9V4.4h6.3M24.85 7.9h4.3"
+        d="M25.9 11.4V4.6h4.6M25.9 7.9h3.5"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="m4.6 4.6 6.8 6.8m0-6.8-6.8 6.8" stroke="#e44747" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -452,7 +421,10 @@ export function App() {
       <div className="document-bar">
         <div className="document-bar-start">
           <span className="app-title">
-            LatexHelper<span className="app-version">(v{__APP_VERSION__})</span>
+            LatexHelper
+            <span className="app-version">
+              (v{__APP_VERSION__} · {__APP_BUILD__})
+            </span>
           </span>
           <div className="file-actions">
             <button

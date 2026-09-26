@@ -1,11 +1,14 @@
 import { spawnSync } from 'node:child_process';
 import { cp, mkdir, readFile, writeFile, chmod, access } from 'node:fs/promises';
 import path from 'node:path';
+import { buildNumber, releaseVersion } from './version.mjs';
 const platform = process.platform;
 if (!['win32', 'darwin'].includes(platform))
   throw new Error('Native Installationspakete werden auf Windows oder macOS gebaut.');
 const architecture = process.arch === 'arm64' ? 'arm64' : 'x64';
 const appUrl = process.env.LATEXHELPER_APP_URL ?? 'http://localhost:38471/';
+const version = await releaseVersion();
+const build = buildNumber();
 if (platform === 'win32' && architecture !== 'x64')
   throw new Error('Windows-Paket benötigt einen x64-Build.');
 function run(command, args, options = {}) {
@@ -35,6 +38,7 @@ if (platform === 'win32') {
     `/DSourceDir=${stage}`,
     `/DOutputDir=${path.resolve('release')}`,
     `/DAppUrl=${appUrl}`,
+    `/DAppVersion=${version}`,
     'packaging/windows/latexhelper.iss',
   ]);
 } else {
@@ -46,7 +50,7 @@ if (platform === 'win32') {
   await cp('dist', path.join(executable, 'dist'), { recursive: true });
   await writeFile(
     path.join(bundle, 'Contents/Info.plist'),
-    '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>de.latexhelper.bridge</string><key>CFBundleName</key><string>LatexHelper Bridge</string><key>CFBundleExecutable</key><string>latexhelper-bridge</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.1.0</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/><key>LSMinimumSystemVersion</key><string>13.0</string></dict></plist>',
+    `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>de.latexhelper.bridge</string><key>CFBundleName</key><string>LatexHelper Bridge</string><key>CFBundleExecutable</key><string>latexhelper-bridge</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${build}</string><key>LSUIElement</key><true/><key>LSMinimumSystemVersion</key><string>13.0</string></dict></plist>`,
   );
   for (const name of ['Install-LatexHelper.command', 'Uninstall-LatexHelper.command']) {
     const script = await readFile(`packaging/macos/${name}`, 'utf8');
@@ -77,4 +81,4 @@ if (platform === 'win32') {
     run('xcrun', ['stapler', 'staple', image]);
   }
 }
-console.log(`Paket erstellt: ${stage}`);
+console.log(`Paket erstellt: ${stage} (Version ${version}, Build ${build})`);

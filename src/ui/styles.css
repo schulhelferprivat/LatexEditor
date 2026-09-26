@@ -648,11 +648,8 @@ code {
   flex: 0 0 auto;
 }
 .gap-snippet-icon {
-  overflow: hidden;
-  width: 36px;
   font-family: monospace;
-  font-size: 8px;
-  letter-spacing: -0.4px;
+  font-size: 9.5px;
   line-height: 1;
   white-space: nowrap;
 }

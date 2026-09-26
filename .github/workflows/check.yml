@@ -21,6 +21,7 @@ jobs:
           components: rustfmt
       - run: npm ci
       - run: npm run check
+      - run: npm run version:check
       - run: npm run format:check
       - run: npm test
       - run: npm run build
@@ -73,6 +74,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: |
+          version="$(cat VERSION)"
+          if [ "refs/tags/v$version" != "$GITHUB_REF" ]; then
+            echo "Tag $GITHUB_REF passt nicht zu VERSION $version." >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v8
         with:
           pattern: LatexHelper-*-unsigned
@@ -85,6 +95,7 @@ jobs:
             release/*.exe
             release/*.dmg
           fail_on_unmatched_files: true
+          name: LatexHelper ${{ steps.version.outputs.value }}
           body: |
             ## Installation
 

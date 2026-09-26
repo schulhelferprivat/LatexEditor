@@ -243,7 +243,7 @@ export const snippets: Snippet[] = [
   {
     id: 'short-solution',
     label: 'Lösung (kurz)',
-    icon: 'FileText',
+    icon: 'Checkmark',
     buttonText: 'Lösung (kurz)',
     parts: [
       '\\lsg{\\begin{tasks}[label-format=\\color{red}\\bfseries,item-format=\\color{red}]\\end{tasks}}',
