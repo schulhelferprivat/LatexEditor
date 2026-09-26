@@ -118,6 +118,43 @@ test('kommentiert markierte LaTeX-Zeilen über das Kontextmenü aus und wieder e
   await menu.getByRole('menuitem', { name: 'Entkommentieren' }).click();
   await expect(lines).toHaveText(['Erste Zeile', '  Zweite Zeile', 'Dritte Zeile']);
 });
+test('bereinigt markierten LaTeX-Code über das Kontextmenü', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Neu beginnen' }).click();
+  const editor = page.getByRole('textbox', { name: 'LaTeX-Quelltext' });
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText(
+    '\\begin{itemize}\n          \\item Erster Punkt\n                \\item Zweiter Punkt\n      \\end{itemize}',
+  );
+  const lines = page.locator('.cm-content .cm-line');
+  const rightClickFirstLine = async () => {
+    const box = (await lines.first().boundingBox())!;
+    await page.mouse.click(box.x + 30, box.y + box.height / 2, { button: 'right' });
+  };
+  await rightClickFirstLine();
+  const menu = page.getByRole('menu', { name: 'Quelltext-Aktionen' });
+  await expect(menu.getByRole('menuitem', { name: 'Codebereinigung' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await rightClickFirstLine();
+  await expect(menu.getByRole('menuitem', { name: 'Codebereinigung' })).toBeEnabled();
+  await menu.getByRole('menuitem', { name: 'Codebereinigung' }).click();
+  await expect(lines).toHaveText([
+    '\\begin{itemize}',
+    '  \\item Erster Punkt',
+    '  \\item Zweiter Punkt',
+    '\\end{itemize}',
+  ]);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(lines).toHaveText([
+    '\\begin{itemize}',
+    '          \\item Erster Punkt',
+    '                \\item Zweiter Punkt',
+    '      \\end{itemize}',
+  ]);
+});
 test('klappt mehrzeilige LaTeX-Umgebungen über die Zeilennummernleiste ein', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

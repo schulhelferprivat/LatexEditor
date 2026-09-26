@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Copy,
   PlugZap,
+  SpellCheck2,
 } from 'lucide-react';
 import { app, dirty } from '../domain/app';
 import { bridgeUnreachable } from '../infra/bridge';
@@ -42,6 +43,7 @@ import { Pdf } from './Pdf';
 import { Dialog } from './Dialog';
 import { Preamble } from './Preamble';
 import { SearchBar } from './SearchBar';
+import { SpellBar } from './SpellBar';
 import { SnippetToolbar } from './SnippetToolbar';
 const download = currentDownload();
 const snippetIcons: Record<string, ComponentType<{ size?: number }>> = {
@@ -333,6 +335,7 @@ export function App() {
   const [log, setLog] = useState(false);
   const [buildMode, setBuildMode] = useState<'draft' | 'final'>('draft');
   const [search, setSearch] = useState({ open: false, nonce: 0 });
+  const [spell, setSpell] = useState({ open: false, nonce: 0 });
   const [copiedDiagnostic, setCopiedDiagnostic] = useState<number | null>(null);
   const [split, setSplit] = useState(() =>
     Math.max(30, Math.min(70, Number(localStorage.getItem('split')) || 50)),
@@ -364,6 +367,10 @@ export function App() {
         event.preventDefault();
         if (!preamble && !state.panel && !state.question) void app.run(() => app.save());
       }
+      if (event.key === 'F7' && !preamble && !state.panel && !state.question) {
+        event.preventDefault();
+        openSpell();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -380,6 +387,9 @@ export function App() {
   }, []);
   function editor() {
     return editors.current.get(state.active);
+  }
+  function openSpell() {
+    setSpell((current) => ({ open: true, nonce: current.nonce + 1 }));
   }
   function openSearch() {
     setSearch((current) => ({ open: true, nonce: current.nonce + 1 }));
@@ -620,26 +630,6 @@ export function App() {
               >
                 <span aria-hidden="true">📦</span>
               </button>
-              <span className="toolbar-rule" />
-              <button
-                className={search.open ? 'icon-button pressed' : 'icon-button'}
-                title="Suchen und Ersetzen · Strg / ⌘ + F"
-                aria-label="Suchen und Ersetzen"
-                aria-pressed={search.open}
-                disabled={!active}
-                onClick={() => openSearch()}
-              >
-                <span aria-hidden="true">🔍</span>
-              </button>
-              <span className="toolbar-rule" />
-              <SnippetToolbar
-                active={!!active}
-                documentId={active?.id ?? null}
-                icons={snippetIcons}
-                onInsert={(snippet) => editor()?.snippet(snippet)}
-              />
-            </div>
-            <div className="editor-toolbar-actions">
               <button
                 className="icon-button diagnostics-action"
                 title="Fehler & Protokoll"
@@ -655,6 +645,34 @@ export function App() {
                   <span className="count-pill">{state.diagnostics.length}</span>
                 )}
               </button>
+              <span className="toolbar-rule" />
+              <button
+                className={search.open ? 'icon-button pressed' : 'icon-button'}
+                title="Suchen und Ersetzen · Strg / ⌘ + F"
+                aria-label="Suchen und Ersetzen"
+                aria-pressed={search.open}
+                disabled={!active}
+                onClick={() => openSearch()}
+              >
+                <span aria-hidden="true">🔍</span>
+              </button>
+              <button
+                className={spell.open ? 'icon-button pressed' : 'icon-button'}
+                title="Rechtschreibfehler durchgehen · F7"
+                aria-label="Rechtschreibfehler durchgehen"
+                aria-pressed={spell.open}
+                disabled={!active}
+                onClick={() => openSpell()}
+              >
+                <SpellCheck2 size={17} aria-hidden="true" />
+              </button>
+              <span className="toolbar-rule" />
+              <SnippetToolbar
+                active={!!active}
+                documentId={active?.id ?? null}
+                icons={snippetIcons}
+                onInsert={(snippet) => editor()?.snippet(snippet)}
+              />
             </div>
           </div>
           {search.open && active && (
@@ -662,6 +680,14 @@ export function App() {
               editor={editor()}
               nonce={search.nonce}
               onClose={() => setSearch({ open: false, nonce: 0 })}
+            />
+          )}
+          {spell.open && active && (
+            <SpellBar
+              editor={editor()}
+              nonce={spell.nonce}
+              revision={active.revision}
+              onClose={() => setSpell({ open: false, nonce: 0 })}
             />
           )}
           <div className="editors">

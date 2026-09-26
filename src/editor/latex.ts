@@ -77,7 +77,14 @@ const mathEnvironments = new Set([
   'eqnarray*',
   'tikzpicture',
 ]);
-const rawEnvironments = new Set(['verbatim', 'verbatim*', 'Verbatim', 'lstlisting', 'minted', 'comment']);
+export const rawEnvironments = new Set([
+  'verbatim',
+  'verbatim*',
+  'Verbatim',
+  'lstlisting',
+  'minted',
+  'comment',
+]);
 const beginArguments: Record<string, number> = {
   tabular: 1,
   'tabular*': 2,

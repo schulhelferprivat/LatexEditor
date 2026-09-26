@@ -1,5 +1,6 @@
 import type { EditorView } from '@codemirror/view';
 import { lineComment, lineUncomment } from '@codemirror/commands';
+import { cleanLatex } from './format';
 
 const wordPattern = /^\p{L}[\p{L}\p{M}]*(?:['’\-][\p{L}\p{M}]+)*$/u;
 const wordScan = /\p{L}[\p{L}\p{M}]*(?:['’\-][\p{L}\p{M}]+)*/gu;
@@ -79,6 +80,21 @@ export class EditorContextMenu {
         }
       })();
     };
+    const clean = document.createElement('button');
+    clean.textContent = 'Codebereinigung';
+    clean.disabled = !text;
+    clean.onclick = () => {
+      this.close();
+      if (!text) return;
+      const from = this.view.state.doc.lineAt(selection.from).from;
+      const to = this.view.state.doc.lineAt(selection.to).to;
+      const region = this.view.state.sliceDoc(from, to);
+      const leading = /^[\t ]*/.exec(region)?.[0] ?? '';
+      const baseIndent = Math.floor(leading.replace(/\t/g, '  ').length / 2);
+      const insert = cleanLatex(region, baseIndent);
+      if (insert !== region) this.view.dispatch({ changes: { from, to, insert }, userEvent: 'format' });
+      this.view.focus();
+    };
     const comment = document.createElement('button');
     comment.textContent = 'Auskommentieren';
     comment.disabled = !text;
@@ -116,7 +132,7 @@ export class EditorContextMenu {
       const line = this.view.state.doc.lineAt(selection.head);
       this.onFindInPdf(line.number, selection.head - line.from + 1);
     };
-    const buttons = [copy, comment, uncomment, addToDictionary, ignoreSpelling, find];
+    const buttons = [copy, clean, comment, uncomment, addToDictionary, ignoreSpelling, find];
     for (const button of buttons) button.setAttribute('role', 'menuitem');
     this.menu.append(...buttons);
     this.menu.hidden = false;

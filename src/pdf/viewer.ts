@@ -349,14 +349,28 @@ export class PdfViewer {
     slot.text.replaceChildren();
   }
   private revealTarget = false;
+  private targetTimer?: ReturnType<typeof setTimeout>;
   show(location: SyncLocation) {
+    clearTimeout(this.targetTimer);
     this.revealTarget = true;
     this.target = location;
-    for (const slot of this.pages) slot.marker.hidden = true;
+    this.hideMarkers();
     const slot = this.pages.find((page) => page.number === location.page);
     if (!slot) return;
     slot.element.scrollIntoView({ block: 'center' });
+    slot.marker.hidden = false;
+    void slot.marker.offsetWidth;
     this.drawTarget(slot);
+    this.targetTimer = setTimeout(() => {
+      this.target = undefined;
+      this.hideMarkers();
+    }, 3000);
+  }
+  private hideMarkers() {
+    for (const slot of this.pages) {
+      slot.marker.hidden = true;
+      slot.marker.classList.remove('pdf-marker-active');
+    }
   }
   private drawTarget(slot: PageSlot) {
     if (
@@ -373,6 +387,7 @@ export class PdfViewer {
       this.target.y,
     );
     slot.marker.hidden = false;
+    slot.marker.classList.add('pdf-marker-active');
     slot.marker.style.left = `${point.left}px`;
     slot.marker.style.top = `${point.top}px`;
     if (this.revealTarget) {
@@ -397,6 +412,7 @@ export class PdfViewer {
     this.contextMenu.destroy();
     this.generation++;
     clearTimeout(this.resizeTimer);
+    clearTimeout(this.targetTimer);
     this.observer.disconnect();
     this.resize.disconnect();
     window.removeEventListener('resize', this.onWindowResize);

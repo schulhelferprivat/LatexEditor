@@ -67,65 +67,67 @@ export function SearchBar({
         value={query.replace}
         onChange={(event) => update({ replace: event.target.value })}
       />
-      <span className="search-count">{query.search ? `${matches} Treffer` : ''}</span>
-      <span className="toolbar-rule" />
-      <button
-        className={query.caseSensitive ? 'icon-button pressed' : 'icon-button'}
-        aria-pressed={query.caseSensitive}
-        title="Groß-/Kleinschreibung beachten"
-        aria-label="Groß-/Kleinschreibung beachten"
-        onClick={() => update({ caseSensitive: !query.caseSensitive })}
-      >
-        <CaseSensitive size={17} />
-      </button>
-      <button
-        className="icon-button"
-        title="Vorheriger Treffer · Shift + Enter"
-        aria-label="Vorheriger Treffer"
-        disabled={!matches}
-        onClick={() => editor?.findPrevious()}
-      >
-        <ArrowUp size={16} />
-      </button>
-      <button
-        className="icon-button"
-        title="Nächster Treffer · Enter"
-        aria-label="Nächster Treffer"
-        disabled={!matches}
-        onClick={() => editor?.findNext()}
-      >
-        <ArrowDown size={16} />
-      </button>
-      <span className="toolbar-rule" />
-      <button
-        className="icon-button"
-        title="Treffer ersetzen"
-        aria-label="Ersetzen"
-        disabled={!matches}
-        onClick={() => editor?.replaceNext()}
-      >
-        <Replace size={16} />
-      </button>
-      <button
-        className="icon-button"
-        title="Alle Treffer ersetzen"
-        aria-label="Alle ersetzen"
-        disabled={!matches}
-        onClick={() => editor?.replaceAll()}
-      >
-        <ReplaceAll size={16} />
-      </button>
-      <button
-        className="icon-button search-close"
-        title="Suche schließen · Esc"
-        aria-label="Suche schließen"
-        onClick={() => {
-          onClose();
-          editor?.focus();
-        }}
-      >
-        <X size={16} />
-      </button>
+      <div className="search-actions">
+        <span className="search-count">{query.search ? `${matches} Treffer` : ''}</span>
+        <span className="toolbar-rule" />
+        <button
+          className={query.caseSensitive ? 'icon-button pressed' : 'icon-button'}
+          aria-pressed={query.caseSensitive}
+          title="Groß-/Kleinschreibung beachten"
+          aria-label="Groß-/Kleinschreibung beachten"
+          onClick={() => update({ caseSensitive: !query.caseSensitive })}
+        >
+          <CaseSensitive size={17} />
+        </button>
+        <button
+          className="icon-button"
+          title="Vorheriger Treffer · Shift + Enter"
+          aria-label="Vorheriger Treffer"
+          disabled={!matches}
+          onClick={() => editor?.findPrevious()}
+        >
+          <ArrowUp size={16} />
+        </button>
+        <button
+          className="icon-button"
+          title="Nächster Treffer · Enter"
+          aria-label="Nächster Treffer"
+          disabled={!matches}
+          onClick={() => editor?.findNext()}
+        >
+          <ArrowDown size={16} />
+        </button>
+        <span className="toolbar-rule" />
+        <button
+          className="icon-button"
+          title="Treffer ersetzen"
+          aria-label="Ersetzen"
+          disabled={!matches}
+          onClick={() => editor?.replaceNext()}
+        >
+          <Replace size={16} />
+        </button>
+        <button
+          className="icon-button"
+          title="Alle Treffer ersetzen"
+          aria-label="Alle ersetzen"
+          disabled={!matches}
+          onClick={() => editor?.replaceAll()}
+        >
+          <ReplaceAll size={16} />
+        </button>
+        <button
+          className="icon-button search-close"
+          title="Suche schließen · Esc"
+          aria-label="Suche schließen"
+          onClick={() => {
+            onClose();
+            editor?.focus();
+          }}
+        >
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }

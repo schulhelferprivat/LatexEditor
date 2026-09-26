@@ -50,7 +50,7 @@ import {
   search,
   setSearchQuery,
 } from '@codemirror/search';
-import { setDiagnostics, type Diagnostic as EditorDiagnostic } from '@codemirror/lint';
+import { forEachDiagnostic, setDiagnostics, type Diagnostic as EditorDiagnostic } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
 import { completeEnvironment, environmentAt, environments } from './latex';
 import { environmentFoldRangeAtLine, environmentFoldRanges, type EnvironmentFoldRange } from './folding';
@@ -283,6 +283,14 @@ export type SearchState = {
   search: string;
   replace: string;
   caseSensitive: boolean;
+};
+export type SpellingIssue = {
+  from: number;
+  to: number;
+  word: string;
+  line: number;
+  context: string;
+  suggestions: string[];
 };
 const germanPhrases = EditorState.phrases.of({
   Find: 'Suchen',
@@ -602,6 +610,43 @@ export class EditorAdapter {
     let count = 0;
     while (!cursor.next().done && count <= 9999) count++;
     return count;
+  }
+  spellIssues(): SpellingIssue[] {
+    const issues: SpellingIssue[] = [];
+    forEachDiagnostic(this.view.state, (diagnostic, from, to) => {
+      if (diagnostic.severity !== 'info') return;
+      const line = this.view.state.doc.lineAt(from);
+      issues.push({
+        from,
+        to,
+        word: this.view.state.doc.sliceString(from, to),
+        line: line.number,
+        context: line.text.trim(),
+        suggestions: (diagnostic.actions ?? []).map((action) => action.name),
+      });
+    });
+    return issues;
+  }
+  revealSpellIssue(issue: SpellingIssue) {
+    if (issue.to > this.view.state.doc.length) return;
+    this.view.dispatch({
+      selection: { anchor: issue.from, head: issue.to },
+      effects: [EditorView.scrollIntoView(issue.from, { y: 'center' })],
+    });
+    this.view.focus();
+  }
+  replaceSpellIssue(issue: SpellingIssue, replacement: string) {
+    if (issue.to > this.view.state.doc.length) return;
+    this.view.dispatch({
+      changes: { from: issue.from, to: issue.to, insert: replacement },
+      selection: { anchor: issue.from + replacement.length },
+      userEvent: 'input.spellcheck',
+    });
+    this.view.focus();
+  }
+  acceptSpelling(word: string, permanent: boolean) {
+    if (permanent) this.addToDictionary(word);
+    else this.ignoreSpelling(word);
   }
   focus() {
     this.view.focus();
