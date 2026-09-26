@@ -1,4 +1,5 @@
 import type { BuildRequest, BuildResult, Capabilities, SyncLocation } from '../domain/types';
+export { bridgeDownloads, currentDownload } from './download';
 const api = `${import.meta.env.VITE_BRIDGE_URL ?? ''}/api/v1`;
 export const bridgeUnreachable =
   'Bridge nicht erreichbar. Bitte LatexHelper Bridge starten und den Zugriff auf lokale Geräte erlauben.';

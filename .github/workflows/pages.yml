@@ -1,21 +1,29 @@
 name: GitHub Pages
 on:
-  push:
+  workflow_run:
+    workflows: ['Checks and native packages']
+    types: [completed]
     branches: [main]
-  workflow_dispatch:
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  actions: read
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
   build:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    env:
+      LATEXHELPER_BASE: /${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
@@ -24,18 +32,70 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          LATEXHELPER_BASE: /${{ github.event.repository.name }}/
           VITE_BRIDGE_URL: http://localhost:38471
-      - uses: actions/configure-pages@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: bridge-windows-x64-${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: dist/downloads
+      - uses: actions/download-artifact@v8
+        with:
+          name: bridge-macos-arm64-${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: dist/downloads
+      - run: node scripts/verify-downloads.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:downloads
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bridge-checksums
+          path: dist/downloads/*.sha256
+          overwrite: true
+          if-no-files-found: error
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: bridge-checksums
+          path: checksums
+      - id: current
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test -n "$current_sha"
+          if [ "$current_sha" = "$EXPECTED_SHA" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Überholter Commit: Veröffentlichung übersprungen.'
+          fi
+      - uses: actions/configure-pages@v6
+        if: steps.current.outputs.deploy == 'true'
       - id: deployment
+        if: steps.current.outputs.deploy == 'true'
         uses: actions/deploy-pages@v5
+      - if: steps.current.outputs.deploy == 'true'
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: node scripts/verify-downloads.mjs checksums "$PAGES_URL"

@@ -17,10 +17,9 @@ describe('single source of truth for the version', () => {
   });
 
   it('leaves no hardcoded version in the packaging inputs', async () => {
-    expect(await read('packaging/windows/latexhelper.iss')).toContain('AppVersion={#AppVersion}');
     const script = await read('scripts/package.mjs');
     expect(script).toContain('CFBundleShortVersionString</key><string>${version}');
-    expect(script).toContain('/DAppVersion=${version}');
+    expect(script).toContain('const version = await appVersion()');
   });
 
   it('shows the commit count as the version, not VERSION', async () => {

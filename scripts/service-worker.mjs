@@ -4,6 +4,7 @@ const paths = [];
 async function scan(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const file = `${dir}/${entry.name}`;
+    if (file === 'dist/downloads') continue;
     if (entry.isDirectory()) await scan(file);
     else if (entry.name !== 'sw.js') paths.push(file.slice(5));
   }

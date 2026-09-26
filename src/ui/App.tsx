@@ -28,14 +28,7 @@ import {
   SpellCheck2,
 } from 'lucide-react';
 import { app, dirty } from '../domain/app';
-import { bridgeUnreachable } from '../infra/bridge';
-import {
-  currentDownload,
-  macArmDownload,
-  macIntelDownload,
-  releasesPage,
-  windowsDownload,
-} from '../infra/download';
+import { bridgeUnreachable, bridgeDownloads, currentDownload } from '../infra/bridge';
 import type { Engine } from '../domain/types';
 import type { EditorAdapter } from '../editor/adapter';
 import { Editor } from './Editor';
@@ -585,14 +578,22 @@ export function App() {
           <button className="text-button" onClick={() => void app.connectBridge()}>
             Erneut verbinden
           </button>
-          <a
-            className="text-button"
-            href={download?.url ?? releasesPage}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Bridge herunterladen
-          </a>
+          {bridgeDownloads.map((option) => (
+            <span className="bridge-download" key={option.url}>
+              <a className="text-button" href={option.url} download>
+                {option.label}
+                {download?.url === option.url ? ' (empfohlen)' : ''}
+              </a>
+              <a
+                className="text-button"
+                href={option.checksumUrl}
+                download
+                aria-label={`SHA-256 für ${option.label}`}
+              >
+                SHA-256
+              </a>
+            </span>
+          ))}
         </div>
       )}
       {state.error && (
@@ -889,26 +890,23 @@ export function App() {
             <li>
               <span>01</span>
               <div>
-                <strong>Bridge installieren</strong>
+                <strong>Bridge starten</strong>
                 <p>
-                  Das LatexHelper-Paket für Windows oder macOS installieren. Die Bridge startet bei der
-                  Anmeldung.
+                  Die Bridge für Windows herunterladen und starten. Unter macOS das ZIP entpacken und
+                  „LatexHelper Bridge“ öffnen. Die Bridge bei Bedarf vor der PWA starten.
                 </p>
                 <p className="setup-downloads">
-                  {[windowsDownload, macArmDownload, macIntelDownload].map((option) => (
-                    <a
-                      key={option.url}
-                      href={option.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-current={download?.url === option.url ? 'true' : undefined}
-                    >
-                      {option.label}
-                    </a>
+                  {bridgeDownloads.map((option) => (
+                    <span className="bridge-download" key={option.url}>
+                      <a href={option.url} download>
+                        {option.label}
+                        {download?.url === option.url ? ' (empfohlen)' : ''}
+                      </a>
+                      <a href={option.checksumUrl} download aria-label={`SHA-256 für ${option.label}`}>
+                        SHA-256
+                      </a>
+                    </span>
                   ))}
-                  <a href={releasesPage} target="_blank" rel="noopener noreferrer">
-                    Alle Versionen
-                  </a>
                 </p>
               </div>
             </li>

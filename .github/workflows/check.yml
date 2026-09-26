@@ -2,9 +2,10 @@ name: Checks and native packages
 on:
   push:
     branches: ['**']
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -40,8 +41,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, macos-15-intel]
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: bridge-windows-x64
+            file: LatexHelper-Bridge-Windows.exe
+          - os: macos-15
+            target: aarch64-apple-darwin
+            artifact: bridge-macos-arm64
+            file: LatexHelper-Bridge-macOS-arm64.zip
     runs-on: ${{ matrix.os }}
+    env:
+      LATEXHELPER_TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,69 +62,19 @@ jobs:
           node-version: 24
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - run: cargo test --manifest-path bridge/Cargo.toml --locked
-      - name: Install Windows packaging compiler
-        if: runner.os == 'Windows'
-        run: choco install innosetup --yes --no-progress
+      - run: cargo test --manifest-path bridge/Cargo.toml --locked --target ${{ matrix.target }}
       - run: npm run package
-        env:
-          LATEXHELPER_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      - run: node scripts/verify-bridge.mjs
       - uses: actions/upload-artifact@v7
         with:
-          name: LatexHelper-${{ matrix.os }}-unsigned
+          name: ${{ matrix.artifact }}-${{ github.sha }}
+          overwrite: true
+          if-no-files-found: error
           path: |
-            release/*.exe
-            release/*.dmg
-  release:
-    needs: [check, native]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - id: version
-        run: |
-          version="$(cat VERSION)"
-          if [ "refs/tags/v$version" != "$GITHUB_REF" ]; then
-            echo "Tag $GITHUB_REF passt nicht zu VERSION $version." >&2
-            exit 1
-          fi
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: LatexHelper-*-unsigned
-          merge-multiple: true
-          path: release
-      - run: ls -l release
-      - uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            release/*.exe
-            release/*.dmg
-          fail_on_unmatched_files: true
-          name: LatexHelper ${{ steps.version.outputs.value }}
-          body: |
-            ## Installation
-
-            1. Paket für die eigene Plattform herunterladen und installieren.
-            2. LatexHelper im Browser öffnen und als App installieren.
-            3. TeX bereitstellen: MiKTeX oder TeX Live unter Windows, MacTeX unter macOS.
-
-            | Plattform | Datei |
-            | --- | --- |
-            | Windows x64 | `LatexHelper-Windows-x64-Setup.exe` |
-            | macOS Apple Silicon | `LatexHelper-macOS-arm64.dmg` |
-            | macOS Intel | `LatexHelper-macOS-x64.dmg` |
-
-            Die Bridge startet danach automatisch bei der Anmeldung.
-
-            ## Hinweis zu unsignierten Paketen
-
-            Die Pakete sind nicht signiert. Deshalb warnen die Betriebssysteme beim ersten Start:
-
-            - **Windows (SmartScreen):** „Weitere Informationen" und dann „Trotzdem ausführen".
-            - **macOS (Gatekeeper):** Rechtsklick auf `Install-LatexHelper.command` und dann „Öffnen".
+            release/${{ matrix.file }}
+            release/${{ matrix.file }}.sha256

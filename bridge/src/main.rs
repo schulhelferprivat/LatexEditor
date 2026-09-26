@@ -728,12 +728,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("Programmverzeichnis fehlt")?
                 .join("dist"),
         );
-    if !dist.join("index.html").is_file() && !app.dev {
-        return Err(
-            "Web-App fehlt. dist neben latexhelper-bridge ablegen oder LATEXHELPER_DIST setzen."
-                .into(),
-        );
-    }
     tokio::spawn(expire_sessions(app.clone()));
     let warmup = app.clone();
     tokio::spawn(async move {
