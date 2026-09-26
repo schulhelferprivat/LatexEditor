@@ -71,7 +71,7 @@ export const defaultConfig = (): Configuration => ({
   variants: fixedVariants(),
   draft: 'arbeitsblatt',
   finals: ['arbeitsblatt', 'loesung'],
-  engine: 'lualatex',
+  engine: 'pdflatex',
   shellEscape: true,
 });
 export function validateConfig(value: unknown): Configuration {

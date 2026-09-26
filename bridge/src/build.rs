@@ -1,12 +1,13 @@
 use crate::{model::*, process, security};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::Mutex;
 
@@ -16,6 +17,51 @@ pub struct Job {
     pub root: PathBuf,
     pub request: BuildRequest,
     pub owner: String,
+    pub shared: Arc<Shared>,
+}
+pub struct Shared {
+    pub dir: PathBuf,
+    fonts: Mutex<()>,
+    rejected_formats: Mutex<HashSet<String>>,
+}
+impl Shared {
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            fonts: Mutex::new(()),
+            rejected_formats: Mutex::new(HashSet::new()),
+        }
+    }
+    pub fn texmf_var(&self) -> PathBuf {
+        self.dir.join("texmf-var")
+    }
+    fn font_marker(&self) -> PathBuf {
+        self.texmf_var().join("latexhelper-fonts-ready")
+    }
+    pub fn fonts_ready(&self, engine: &Path) -> bool {
+        std::fs::read_to_string(self.font_marker()).ok().as_deref()
+            == Some(engine.to_string_lossy().as_ref())
+    }
+}
+#[derive(Clone)]
+struct Format {
+    key: String,
+    path: PathBuf,
+    built: Option<Duration>,
+}
+const FORMAT_VERSION: u32 = 1;
+const FORMAT_JOB: &str = "latexhelper-preamble";
+fn seconds(duration: Duration) -> String {
+    format!("{:.2} s", duration.as_secs_f64()).replace('.', ",")
+}
+fn append_note(log: &mut String, note: &str) {
+    if !log.is_empty() {
+        if !log.ends_with('\n') {
+            log.push('\n');
+        }
+        log.push('\n');
+    }
+    log.push_str(&format!("LatexHelper: {note}\n"));
 }
 async fn report_progress(job: &Job, stages: &Mutex<Vec<String>>, index: usize, stage: String) {
     let line = {
@@ -107,7 +153,7 @@ pub fn diagnostics(log: &str, main: &str) -> Vec<Diagnostic> {
     }
     items
 }
-pub const PRESERVED_CACHES: [&str; 3] = ["cache", "texmf", "config"];
+pub const PRESERVED_CACHES: [&str; 2] = ["texmf", "config"];
 fn is_unchanged(source: &std::fs::Metadata, dest: &Path) -> bool {
     let Ok(existing) = dest.metadata() else {
         return false;
@@ -225,6 +271,207 @@ fn explain_plot_errors(diagnostics: &mut [Diagnostic], shell_escape: bool, has_g
         }
     }
 }
+fn explain_engine_errors(diagnostics: &mut [Diagnostic], engine: &str) {
+    for diagnostic in diagnostics {
+        if engine == "pdflatex"
+            && diagnostic
+                .message
+                .replace('\n', "")
+                .contains("requires either XeTeX or")
+        {
+            diagnostic.message.push_str("\nfontspec benötigt LuaLaTeX oder XeLaTeX. Unter „Präambel“ die Vorlage wiederherstellen oder in den Einstellungen LuaLaTeX als PDF-Builder wählen.");
+        }
+    }
+}
+fn explain_lua_font_failure(diagnostics: &mut Vec<Diagnostic>, request: &BuildRequest, log: &str) {
+    if request.engine == "lualatex"
+        && !request.shell_escape
+        && log.contains("luaotfload")
+        && log.contains("FATAL ERROR")
+    {
+        diagnostics.insert(
+            0,
+            Diagnostic {
+                severity: "error".into(),
+                message: "LuaLaTeX kann ohne Shell Escape keine Schriften laden, weil die Bridge Lesezugriffe auf den Dokumentordner beschränkt. In den Einstellungen Shell Escape für dieses Dokument aktivieren oder pdfLaTeX als PDF-Builder wählen.".into(),
+                file: request.main.clone(),
+                line: None,
+                column: None,
+            },
+        );
+    }
+}
+fn is_format_failure(log: &str) -> bool {
+    let lowercase = log.to_lowercase();
+    !log.contains("latexhelper-wrapper-")
+        || ["format file", "memory dump", "stymied", "referenced object"]
+            .iter()
+            .any(|signal| lowercase.contains(signal))
+}
+fn link_or_copy(from: &Path, to: &Path) -> Result<(), String> {
+    if to.exists() {
+        std::fs::remove_file(to).map_err(|e| e.to_string())?;
+    }
+    if std::fs::hard_link(from, to).is_ok() {
+        return Ok(());
+    }
+    std::fs::copy(from, to)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+pub async fn prepare_fonts(shared: &Shared, engine: &Path, cancel: Arc<AtomicBool>) {
+    let _guard = shared.fonts.lock().await;
+    if shared.fonts_ready(engine) || std::fs::create_dir_all(&shared.dir).is_err() {
+        return;
+    }
+    let Ok(temp) = tempfile::Builder::new()
+        .prefix("fonts-")
+        .tempdir_in(&shared.dir)
+    else {
+        return;
+    };
+    if std::fs::write(
+        temp.path().join("fonts.tex"),
+        "\\documentclass{article}\\begin{document}x\\textsf{x}\\textbf{x}\\end{document}\n",
+    )
+    .is_err()
+    {
+        return;
+    }
+    let args = [
+        "-interaction=nonstopmode".into(),
+        "-halt-on-error".into(),
+        "-shell-escape".into(),
+        "--nosocket".into(),
+        "fonts.tex".into(),
+    ];
+    let texmf_var = shared.texmf_var();
+    if let Ok((true, _)) =
+        process::run(engine, &args, temp.path(), cancel, true, None, &texmf_var).await
+    {
+        let _ = std::fs::create_dir_all(&texmf_var);
+        let _ = std::fs::write(shared.font_marker(), engine.to_string_lossy().as_bytes());
+    }
+}
+fn format_key(request: &BuildRequest, engine: &Path) -> Option<String> {
+    let binary = std::fs::metadata(engine).ok()?;
+    let modified = binary
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let day = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() / 86_400;
+    let identity = serde_json::to_vec(&(
+        FORMAT_VERSION,
+        &request.preamble,
+        &request.engine,
+        engine.to_string_lossy(),
+        binary.len(),
+        modified,
+        request.shell_escape,
+        day,
+    ))
+    .ok()?;
+    Some(format!("{:x}", Sha256::digest(identity)))
+}
+fn prune_formats(formats: &Path, keep: &str) {
+    let Ok(entries) = std::fs::read_dir(formats) else {
+        return;
+    };
+    let mut others: Vec<_> = entries
+        .flatten()
+        .filter(|entry| entry.file_name() != keep)
+        .filter(|entry| security::reject_link(&entry.path()).is_ok())
+        .filter_map(|entry| {
+            let modified = entry.metadata().ok()?.modified().ok()?;
+            Some((modified, entry.path()))
+        })
+        .collect();
+    others.sort();
+    others.reverse();
+    for (_, path) in others.into_iter().skip(2) {
+        let _ = std::fs::remove_dir_all(path);
+    }
+}
+async fn ensure_format(job: &Job, engine: &Path) -> Option<Format> {
+    let preamble = job.request.preamble.as_ref()?;
+    if job.request.engine != "pdflatex"
+        || job
+            .request
+            .variants
+            .iter()
+            .any(|variant| !variant.defines.is_empty())
+    {
+        return None;
+    }
+    let key = format_key(&job.request, engine)?;
+    if job.shared.rejected_formats.lock().await.contains(&key) {
+        return None;
+    }
+    let formats = job.shared.dir.join("formats");
+    let dir = formats.join(&key);
+    let path = dir.join(format!("{FORMAT_JOB}.fmt"));
+    if path.is_file() {
+        return Some(Format {
+            key,
+            path,
+            built: None,
+        });
+    }
+    job.result.lock().await.progress = "Präambel vorbereiten".into();
+    let started = Instant::now();
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).ok()?;
+    }
+    std::fs::create_dir_all(&dir).ok()?;
+    std::fs::write(dir.join(format!("{FORMAT_JOB}.tex")), preamble).ok()?;
+    std::fs::write(
+        dir.join("source.tex"),
+        format!(
+            "\\input{{{FORMAT_JOB}.tex}}\n\\endofdump\n\\begin{{document}}\n\\end{{document}}\n"
+        ),
+    )
+    .ok()?;
+    let args = [
+        "-ini".into(),
+        "-interaction=nonstopmode".into(),
+        "-halt-on-error".into(),
+        if job.request.shell_escape {
+            "-shell-escape"
+        } else {
+            "-no-shell-escape"
+        }
+        .into(),
+        format!("-jobname={FORMAT_JOB}"),
+        "&pdflatex".into(),
+        "mylatexformat.ltx".into(),
+        "source.tex".into(),
+    ];
+    let outcome = process::run(
+        engine,
+        &args,
+        &dir,
+        job.cancel.clone(),
+        job.request.shell_escape,
+        None,
+        &job.shared.texmf_var(),
+    )
+    .await;
+    if !matches!(outcome, Ok((true, _))) || !path.is_file() {
+        let _ = std::fs::remove_dir_all(&dir);
+        if outcome.is_ok() {
+            job.shared.rejected_formats.lock().await.insert(key);
+        }
+        return None;
+    }
+    prune_formats(&formats, &key);
+    Some(Format {
+        key,
+        path,
+        built: Some(started.elapsed()),
+    })
+}
 fn fingerprint(root: &Path) -> Vec<u8> {
     let mut hash = Sha256::new();
     for ext in ["aux", "toc", "out", "bcf", "bbl"] {
@@ -238,6 +485,7 @@ async fn compile(
     tools: &HashMap<String, PathBuf>,
     stages: &Mutex<Vec<String>>,
     index: usize,
+    format: Option<&Format>,
 ) -> Result<VariantResult, String> {
     let dir = job.root.join("runs").join(&variant.id);
     let cache_key = format!(
@@ -265,18 +513,26 @@ async fn compile(
     copy_tree(&job.root.join("input"), &dir)?;
     std::fs::create_dir_all(dir.join("out")).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("cache-key"), &cache_key).map_err(|e| e.to_string())?;
-    let wrapper_name = format!("latexhelper-wrapper-{cache_key}.tex");
+    let file_key = &cache_key[..16];
+    let wrapper_name = format!("latexhelper-wrapper-{file_key}.tex");
     let preamble_name = job
         .request
         .preamble
         .as_ref()
-        .map(|_| format!("latexhelper-preamble-{cache_key}.tex"));
+        .map(|_| format!("latexhelper-preamble-{file_key}.tex"));
+    let format_name = format.map(|_| format!("latexhelper-format-{file_key}"));
     if job.root.join("input").join(&wrapper_name).exists()
         || preamble_name
             .as_ref()
             .is_some_and(|name| job.root.join("input").join(name).exists())
+        || format_name
+            .as_ref()
+            .is_some_and(|name| job.root.join("input").join(format!("{name}.fmt")).exists())
     {
         return Err("Reservierter Dateiname im Projekt".into());
+    }
+    if let (Some(format), Some(name)) = (format, &format_name) {
+        link_or_copy(&format.path, &dir.join(format!("{name}.fmt")))?;
     }
     if dir.join("out/result.pdf").exists() {
         std::fs::remove_file(dir.join("out/result.pdf")).map_err(|e| e.to_string())?;
@@ -295,6 +551,7 @@ async fn compile(
             variant,
             preamble_name.as_deref(),
             wraps_document,
+            format_name.is_some(),
         ),
     )
     .map_err(|e| e.to_string())?;
@@ -319,7 +576,11 @@ async fn compile(
     if job.request.engine == "lualatex" {
         args.push("--nosocket".into());
     }
+    if let Some(name) = &format_name {
+        args.push(format!("-fmt={name}"));
+    }
     args.push(wrapper_name);
+    let texmf_var = job.shared.texmf_var();
     let mut log = String::new();
     let mut last_engine_output = String::new();
     let mut success = true;
@@ -339,6 +600,7 @@ async fn compile(
         )
         .await;
         let gnuplot_dir = tools.get("gnuplot").and_then(|tool| tool.parent());
+        let started = Instant::now();
         let (ok, output) = process::run(
             engine,
             &args,
@@ -346,9 +608,14 @@ async fn compile(
             job.cancel.clone(),
             job.request.shell_escape,
             gnuplot_dir,
+            &texmf_var,
         )
         .await?;
         log.push_str(&output);
+        append_note(
+            &mut log,
+            &format!("Durchlauf {pass} · {}", seconds(started.elapsed())),
+        );
         last_engine_output = output.clone();
         if !ok {
             success = false;
@@ -390,9 +657,22 @@ async fn compile(
             let executable = tools
                 .get(tool)
                 .ok_or_else(|| format!("{tool} wird benötigt, ist aber nicht installiert"))?;
-            let (ok, output) =
-                process::run(executable, &bib_args, &dir, job.cancel.clone(), false, None).await?;
+            let started = Instant::now();
+            let (ok, output) = process::run(
+                executable,
+                &bib_args,
+                &dir,
+                job.cancel.clone(),
+                false,
+                None,
+                &texmf_var,
+            )
+            .await?;
             log.push_str(&output);
+            append_note(
+                &mut log,
+                &format!("{tool} · {}", seconds(started.elapsed())),
+            );
             bibliography = bib_key;
             if !ok {
                 success = false;
@@ -418,6 +698,8 @@ async fn compile(
         job.request.shell_escape,
         tools.contains_key("gnuplot"),
     );
+    explain_engine_errors(&mut diagnostics, &job.request.engine);
+    explain_lua_font_failure(&mut diagnostics, &job.request, &log);
     if let Some(name) = &preamble_name {
         for diagnostic in &mut diagnostics {
             if diagnostic.file.replace('\\', "/").rsplit('/').next() == Some(name.as_str()) {
@@ -464,12 +746,25 @@ pub async fn execute(job: Arc<Job>, tools: Arc<HashMap<String, PathBuf>>) {
         .unwrap_or(1)
         .min(count.max(1));
     let limit = Arc::new(tokio::sync::Semaphore::new(permits));
+    let engine = tools.get(&job.request.engine).cloned();
+    if let Some(engine) = engine
+        .as_ref()
+        .filter(|engine| job.request.engine == "lualatex" && !job.shared.fonts_ready(engine))
+    {
+        job.result.lock().await.progress = "Schriftcache vorbereiten".into();
+        prepare_fonts(&job.shared, engine, job.cancel.clone()).await;
+    }
+    let format = match &engine {
+        Some(engine) => ensure_format(&job, engine).await,
+        None => None,
+    };
     let mut tasks = tokio::task::JoinSet::new();
     for index in 0..count {
         let job = job.clone();
         let tools = tools.clone();
         let stages = stages.clone();
         let limit = limit.clone();
+        let format = format.clone();
         tasks.spawn(async move {
             if job.cancel.load(Ordering::SeqCst) {
                 return (index, None);
@@ -481,8 +776,38 @@ pub async fn execute(job: Arc<Job>, tools: Arc<HashMap<String, PathBuf>>) {
                 return (index, None);
             }
             let variant = &job.request.variants[index];
-            let result = match compile(&job, variant, &tools, &stages, index).await {
-                Ok(result) => result,
+            let mut note = String::new();
+            let mut outcome = compile(&job, variant, &tools, &stages, index, format.as_ref()).await;
+            if let Some(format) = &format {
+                match &outcome {
+                    Ok(result) if !result.ok && is_format_failure(&result.log) => {
+                        job.shared
+                            .rejected_formats
+                            .lock()
+                            .await
+                            .insert(format.key.clone());
+                        append_note(
+                            &mut note,
+                            "Vorkompilierte Präambel unbrauchbar, Build ohne Format wiederholt",
+                        );
+                        outcome = compile(&job, variant, &tools, &stages, index, None).await;
+                    }
+                    _ => append_note(
+                        &mut note,
+                        &match format.built {
+                            Some(duration) => {
+                                format!("Präambel vorkompiliert · {}", seconds(duration))
+                            }
+                            None => "Vorkompilierte Präambel verwendet".into(),
+                        },
+                    ),
+                }
+            }
+            let result = match outcome {
+                Ok(mut result) => {
+                    result.log.insert_str(0, &note);
+                    result
+                }
                 Err(message) => VariantResult {
                     variant: variant.id.clone(),
                     ok: false,
@@ -590,6 +915,7 @@ pub async fn sync(
         Arc::new(AtomicBool::new(false)),
         false,
         None,
+        &job.shared.texmf_var(),
     )
     .await?;
     if !ok {
@@ -678,6 +1004,36 @@ mod tests {
         assert_eq!(d[1].severity, "warning");
     }
     #[test]
+    fn explains_fontspec_under_pdflatex_and_detects_format_failures() {
+        let log = "./latexhelper-preamble-x.tex:2: Package fontspec Error: The fontspec package requires either XeTeX or\n(fontspec)                      LuaTeX.\n\nl.2 \\usepackage{fontspec}\n";
+        let mut result = diagnostics(log, "main.tex");
+        explain_engine_errors(&mut result, "lualatex");
+        assert!(!result[0].message.contains("Vorlage"));
+        explain_engine_errors(&mut result, "pdflatex");
+        assert!(result[0].message.contains("Vorlage wiederherstellen"));
+        assert!(is_format_failure(
+            "---! ./x.fmt was written by tex\n(Fatal format file error; I'm stymied)"
+        ));
+        let crash = "luaotfload | load : FATAL ERROR\nluaotfload | load :   × Failed to load \"luaotfload\" module \"multiscript\".\n";
+        let mut request: BuildRequest = serde_json::from_value(serde_json::json!({"workspace":"x","main":"main.tex","engine":"lualatex","variants":[{"id":"a","name":"A","suffix":"a","defines":{}}]})).unwrap();
+        let mut result = diagnostics(crash, "main.tex");
+        explain_lua_font_failure(&mut result, &request, crash);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].message.contains("Shell Escape"));
+        assert_eq!(result[0].severity, "error");
+        request.shell_escape = true;
+        let mut result = diagnostics(crash, "main.tex");
+        explain_lua_font_failure(&mut result, &request, crash);
+        assert!(result.is_empty());
+        assert!(is_format_failure("Sorry, but pdflatex did not succeed."));
+        assert!(is_format_failure(
+            "(./latexhelper-wrapper-a.tex\n!pdfTeX error (ext1): cannot find referenced object."
+        ));
+        assert!(!is_format_failure(
+            "(./latexhelper-wrapper-a.tex\n./main.tex:3: Undefined control sequence."
+        ));
+    }
+    #[test]
     fn explains_missing_tkz_fct_plot_data() {
         for file in ["tkzfonct", "tkzfct"] {
             let log = format!("./Umkehrfunktion.tex:26: Package pgf Error: Plot data file `result.{file}.tab\nle' not found.\n");
@@ -709,7 +1065,7 @@ mod engine_tests {
         tools: &HashMap<String, PathBuf>,
     ) -> Result<VariantResult, String> {
         let stages = Mutex::new(vec![String::new()]);
-        compile(job, variant, tools, &stages, 0).await
+        compile(job, variant, tools, &stages, 0, None).await
     }
     #[tokio::test]
     #[ignore = "Requires pdfLaTeX"]
@@ -752,17 +1108,98 @@ mod engine_tests {
         let variant = job.request.variants[0].clone();
         assert!(compile_once(&job, &variant, &tools).await.unwrap().ok);
         let run = job.root.join("runs/student");
-        std::fs::create_dir_all(run.join("cache/luatex-cache")).unwrap();
-        std::fs::write(run.join("cache/luatex-cache/fonts.luc"), "font cache").unwrap();
+        std::fs::create_dir_all(run.join("config")).unwrap();
+        std::fs::write(run.join("config/tool.cfg"), "tool cache").unwrap();
         std::fs::write(run.join("out/stale.aux"), "veraltet").unwrap();
         Arc::get_mut(&mut job).unwrap().request.preamble =
             Some("\\documentclass[12pt]{article}".into());
         assert!(compile_once(&job, &variant, &tools).await.unwrap().ok);
         assert_eq!(
-            std::fs::read_to_string(run.join("cache/luatex-cache/fonts.luc")).unwrap(),
-            "font cache"
+            std::fs::read_to_string(run.join("config/tool.cfg")).unwrap(),
+            "tool cache"
         );
+        assert!(!run.join("cache").exists());
         assert!(!run.join("out/stale.aux").exists());
+    }
+    #[tokio::test]
+    #[ignore = "Requires LuaLaTeX"]
+    async fn lualatex_warms_one_shared_font_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let tools = Arc::new(process::discover());
+        let mut job = job(
+            temp.path(),
+            "lualatex",
+            "fonts.tex",
+            variants().into_iter().take(1).collect(),
+        );
+        Arc::get_mut(&mut job).unwrap().request.shell_escape = true;
+        std::fs::write(
+            job.root.join("input/fonts.tex"),
+            "\\documentclass{article}\\begin{document}Text\\end{document}",
+        )
+        .unwrap();
+        let engine = tools["lualatex"].clone();
+        assert!(!job.shared.fonts_ready(&engine));
+        execute(job.clone(), tools).await;
+        let result = job.result.lock().await.clone();
+        assert!(result.results[0].ok, "{}", result.results[0].log);
+        assert!(job.shared.fonts_ready(&engine));
+        assert!(job.shared.texmf_var().join("luatex-cache").is_dir());
+        assert!(!job.root.join("runs/student/cache").exists());
+    }
+    #[tokio::test]
+    #[ignore = "Requires pdfLaTeX and mylatexformat"]
+    async fn pdflatex_reuses_precompiled_preamble_and_recovers_from_broken_format() {
+        let temp = tempfile::tempdir().unwrap();
+        let tools = Arc::new(process::discover());
+        let mut job = job(
+            temp.path(),
+            "pdflatex",
+            "format.tex",
+            serde_json::from_value(serde_json::json!([
+                {"id":"arbeitsblatt","name":"Arbeitsblatt","suffix":"arbeitsblatt","defines":{},"solution":false},
+                {"id":"loesung","name":"Lösung","suffix":"loesung","defines":{},"solution":true}
+            ]))
+            .unwrap(),
+        );
+        Arc::get_mut(&mut job).unwrap().request.preamble = Some(
+            "\\documentclass{article}\n\\usepackage{ifthen}\n\\newboolean{loesung}\n\\newcommand{\\marker}{Vorkompiliert}\n".into(),
+        );
+        std::fs::write(
+            job.root.join("input/format.tex"),
+            "\\marker\\ifthenelse{\\boolean{loesung}}{ Loesung}{ Aufgabe}\n",
+        )
+        .unwrap();
+        let logs = |result: &BuildResult| {
+            assert_eq!(result.results.len(), 2);
+            for variant in &result.results {
+                assert!(variant.ok, "{}", variant.log);
+            }
+            result.results[0].log.clone()
+        };
+        execute(job.clone(), tools.clone()).await;
+        assert!(logs(&job.result.lock().await.clone())
+            .starts_with("LatexHelper: Präambel vorkompiliert"));
+        let formats: Vec<_> = std::fs::read_dir(job.shared.dir.join("formats"))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(formats.len(), 1);
+        let format = formats[0].path().join(format!("{FORMAT_JOB}.fmt"));
+        assert!(format.is_file());
+        assert_ne!(
+            std::fs::read(checked_artifact(&job, "arbeitsblatt", "pdf").unwrap()).unwrap(),
+            std::fs::read(checked_artifact(&job, "loesung", "pdf").unwrap()).unwrap()
+        );
+        execute(job.clone(), tools.clone()).await;
+        assert!(logs(&job.result.lock().await.clone())
+            .starts_with("LatexHelper: Vorkompilierte Präambel verwendet"));
+        std::fs::write(&format, "kein Format").unwrap();
+        execute(job.clone(), tools.clone()).await;
+        assert!(logs(&job.result.lock().await.clone())
+            .starts_with("LatexHelper: Vorkompilierte Präambel unbrauchbar"));
+        execute(job.clone(), tools).await;
+        assert!(!logs(&job.result.lock().await.clone()).contains("Vorkompilierte Präambel"));
     }
     #[tokio::test]
     #[ignore = "Requires pdfLaTeX"]
@@ -859,6 +1296,7 @@ mod engine_tests {
                 variants,
             },
             owner: "test".into(),
+            shared: Arc::new(Shared::new(root.join("shared"))),
         })
     }
     fn variants() -> Vec<Variant> {
@@ -997,6 +1435,40 @@ mod engine_tests {
         }
     }
     #[tokio::test]
+    #[ignore = "Requires LuaLaTeX from TeX Live"]
+    async fn lualatex_without_shell_escape_explains_blocked_font_loading() {
+        let temp = tempfile::tempdir().unwrap();
+        let tools = Arc::new(process::discover());
+        let job = job(
+            temp.path(),
+            "lualatex",
+            "fonts.tex",
+            variants().into_iter().take(1).collect(),
+        );
+        std::fs::write(
+            job.root.join("input/fonts.tex"),
+            "\\documentclass{article}\\begin{document}Text\\end{document}",
+        )
+        .unwrap();
+        execute(job.clone(), tools).await;
+        let result = job.result.lock().await.clone();
+        let variant = &result.results[0];
+        if variant.ok {
+            return;
+        }
+        assert!(
+            variant.diagnostics[0]
+                .message
+                .starts_with("LuaLaTeX kann ohne Shell Escape"),
+            "{}",
+            variant.log
+        );
+        assert!(!variant
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("Details im Log")));
+    }
+    #[tokio::test]
     #[ignore = "Requires LuaLaTeX, BibTeX, Biber and biblatex on PATH"]
     async fn real_bibliography_and_error_positions() {
         let tools = Arc::new(process::discover());
@@ -1004,12 +1476,13 @@ mod engine_tests {
         assert!(tools.contains_key("bibtex"));
         for main in ["bibtex.tex", "biber.tex"] {
             let temp = tempfile::tempdir().unwrap();
-            let job = job(
+            let mut job = job(
                 temp.path(),
                 "lualatex",
                 main,
                 variants().into_iter().take(1).collect(),
             );
+            Arc::get_mut(&mut job).unwrap().request.shell_escape = true;
             execute(job.clone(), tools.clone()).await;
             let result = job.result.lock().await.clone();
             assert!(result.results[0].ok, "{}", result.results[0].log);
@@ -1018,12 +1491,13 @@ mod engine_tests {
             assert!(bbl.contains("Knuth"));
         }
         let temp = tempfile::tempdir().unwrap();
-        let job = job(
+        let mut job = job(
             temp.path(),
             "lualatex",
             "error.tex",
             variants().into_iter().take(1).collect(),
         );
+        Arc::get_mut(&mut job).unwrap().request.shell_escape = true;
         execute(job.clone(), tools).await;
         let result = job.result.lock().await.clone();
         assert!(!result.results[0].ok);

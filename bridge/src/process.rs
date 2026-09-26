@@ -204,6 +204,7 @@ pub async fn run(
     cancel: Arc<AtomicBool>,
     shell_escape: bool,
     extra_tool_dir: Option<&Path>,
+    texmf_var: &Path,
 ) -> Result<(bool, String), String> {
     if cancel.load(Ordering::SeqCst) {
         return Err("Abgebrochen".into());
@@ -244,12 +245,13 @@ pub async fn run(
         std::env::join_paths(search_path).map_err(|e| e.to_string())?,
     );
     command
+        .env("max_print_line", "10000")
         .env("openin_any", "p")
         .env("openout_any", "p")
         .env("shell_escape", if shell_escape { "t" } else { "f" })
         .env("GNUPLOT_LIB", cwd.join("out"))
         .env("TEXMFOUTPUT", cwd.join("out"))
-        .env("TEXMFVAR", cwd.join("cache"))
+        .env("TEXMFVAR", texmf_var)
         .env("TEXMFCONFIG", cwd.join("config"))
         .env("TEXMFHOME", cwd.join("texmf"))
         .env(
@@ -405,11 +407,30 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             true,
             Some(&gnuplot),
+            &temp.path().join("cache"),
         )
         .await
         .unwrap();
         assert!(ok, "{output}");
         assert_eq!(output, temp.path().join("out").to_string_lossy());
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn tex_log_lines_are_not_wrapped() {
+        let temp = tempfile::tempdir().unwrap();
+        let (ok, output) = run(
+            Path::new("/bin/sh"),
+            &["-c".into(), "printf '%s' \"$max_print_line\"".into()],
+            temp.path(),
+            Arc::new(AtomicBool::new(false)),
+            false,
+            None,
+            &temp.path().join("cache"),
+        )
+        .await
+        .unwrap();
+        assert!(ok, "{output}");
+        assert_eq!(output, "10000");
     }
     #[tokio::test]
     async fn cancelled_command_never_starts() {
@@ -421,6 +442,7 @@ mod tests {
             Arc::new(AtomicBool::new(true)),
             false,
             None,
+            &temp.path().join("cache"),
         )
         .await;
         assert_eq!(result.unwrap_err(), "Abgebrochen");
@@ -449,6 +471,7 @@ mod tests {
                 flag,
                 false,
                 None,
+                &root.join("cache"),
             )
             .await
         });

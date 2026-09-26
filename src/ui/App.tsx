@@ -383,6 +383,11 @@ export function App() {
         event.preventDefault();
         if (!preamble && !state.panel && !state.question) void app.run(() => app.save());
       }
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        if (!preamble && !state.panel && !state.question && active && !blocked && !state.bridgeOffline)
+          void app.run(() => app.build(selectedBuildMode));
+      }
       if (event.key === 'F7' && !preamble && !state.panel && !state.question) {
         event.preventDefault();
         openSpell();
@@ -390,7 +395,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [preamble, state.panel, state.question]);
+  }, [preamble, state.panel, state.question, active, blocked, state.bridgeOffline, selectedBuildMode]);
   useEffect(() => {
     const onClose = (event: BeforeUnloadEvent) => {
       if (app.state.documents.some(dirty) || app.state.busy) {
@@ -564,7 +569,7 @@ export function App() {
             <button
               className="header-action build-button"
               disabled={!active || blocked || state.bridgeOffline}
-              title={state.bridgeOffline ? bridgeUnreachable : 'Kompilieren'}
+              title={state.bridgeOffline ? bridgeUnreachable : 'Kompilieren (Ctrl+Enter)'}
               aria-label="Kompilieren"
               onClick={() => void app.run(() => app.build(selectedBuildMode))}
             >
@@ -942,7 +947,7 @@ export function App() {
             <select
               id="engine"
               className="engine-select"
-              value={active?.config.engine ?? 'lualatex'}
+              value={active?.config.engine ?? 'pdflatex'}
               disabled={!active || blocked}
               onChange={(event) =>
                 active && app.configure({ ...active.config, engine: event.target.value as Engine })

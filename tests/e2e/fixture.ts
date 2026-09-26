@@ -9,7 +9,7 @@ export const test = base.extend({
         return route.fulfill({
           json: {
             token: 'test',
-            capabilities: { version: '1', engines: ['lualatex'], tools: ['lualatex', 'synctex'] },
+            capabilities: { version: '1', engines: ['lualatex', 'pdflatex'], tools: ['lualatex', 'synctex'] },
           },
         });
       return route.fulfill({ json: {} });

@@ -43,6 +43,7 @@ struct App {
     gnuplot_dir: Arc<Mutex<Option<String>>>,
     tool_update: Arc<Mutex<()>>,
     root: PathBuf,
+    shared: Arc<build::Shared>,
     dev: bool,
 }
 const APP_ORIGIN: &str = "https://schulhelferprivat.github.io";
@@ -507,6 +508,7 @@ async fn start(
         root: space.dir.path().to_path_buf(),
         request,
         owner: owner(&headers),
+        shared: app.shared.clone(),
     });
     jobs.insert(id.clone(), job.clone());
     tokio::spawn(build::execute(job, tools.clone()));
@@ -710,6 +712,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tex_dir: Arc::new(Mutex::new(std::env::var("LATEXHELPER_TEX_DIR").ok())),
         gnuplot_dir: Arc::new(Mutex::new(std::env::var("LATEXHELPER_GNUPLOT_DIR").ok())),
         tool_update: Arc::new(Mutex::new(())),
+        shared: Arc::new(build::Shared::new(
+            root.parent()
+                .ok_or("Cache-Verzeichnis fehlt")?
+                .to_path_buf(),
+        )),
         root,
         dev: std::env::var("LATEXHELPER_DEV").as_deref() == Ok("1"),
     };
@@ -728,6 +735,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     tokio::spawn(expire_sessions(app.clone()));
+    let warmup = app.clone();
+    tokio::spawn(async move {
+        let tools = warmup.tools.lock().await.clone();
+        if let Some(engine) = tools.get("lualatex") {
+            build::prepare_fonts(&warmup.shared, engine, Arc::new(AtomicBool::new(false))).await;
+        }
+    });
     let router = router(app.clone(), dist);
     println!("LatexHelper: http://localhost:38471");
     let shutdown_app = app.clone();
@@ -774,6 +788,7 @@ mod api_tests {
             gnuplot_dir: Arc::new(Mutex::new(None)),
             tool_update: Arc::new(Mutex::new(())),
             root: root.to_owned(),
+            shared: Arc::new(build::Shared::new(root.join("shared"))),
             dev: false,
         }
     }
@@ -1250,6 +1265,7 @@ mod api_tests {
                 variants: Vec::new(),
             },
             owner: "secret".into(),
+            shared: app.shared.clone(),
         });
         app.jobs
             .lock()

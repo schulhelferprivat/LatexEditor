@@ -1,6 +1,12 @@
 \newcommand{\DoNotLoadEpstopdf}{}
 \documentclass[a4paper]{scrartcl}
-\usepackage{fontspec}
+\usepackage{iftex}
+\ifPDFTeX
+	\usepackage[T1]{fontenc}
+	\usepackage{lmodern}
+\else
+	\usepackage{fontspec}
+\fi
 \usepackage[ngerman]{babel}
 \usepackage{rotating}
 \usepackage{geometry}
@@ -55,7 +61,6 @@
 \usepackage[hidelinks]{hyperref}
 
 \geometry{left=2cm,right=2cm,top=2cm,bottom=2cm}
-\setsansfont{Latin Modern Sans}
 \renewcommand{\familydefault}{\sfdefault}
 \parindent 0pt
 \pagestyle{scrheadings}

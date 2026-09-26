@@ -165,8 +165,12 @@ pub fn wrapper(
     variant: &crate::model::Variant,
     preamble_name: Option<&str>,
     wraps_document: bool,
+    precompiled: bool,
 ) -> String {
     let mut text = String::new();
+    if precompiled {
+        text.push_str("\\endofdump\n");
+    }
     for (name, value) in &variant.defines {
         if let Some(flag) = value.as_bool() {
             text.push_str(&format!("\\ifcsname if{name}\\endcsname\\errmessage{{Define already exists: {name}}}\\fi\n\\expandafter\\newif\\csname if{name}\\endcsname\n\\csname {name}{}\\endcsname\n", if flag {"true"} else {"false"}));
@@ -191,7 +195,9 @@ pub fn wrapper(
         }
     }
     if let Some(name) = preamble_name {
-        text.push_str(&format!("\\input{{{name}}}\n"));
+        if !precompiled {
+            text.push_str(&format!("\\input{{{name}}}\n"));
+        }
         if let Some(solution) = request.solution.or(variant.solution) {
             text.push_str(&format!(
                 "\\setboolean{{loesung}}{{{}}}\n",
@@ -233,12 +239,42 @@ mod tests {
     #[test]
     fn preamble_wrapper_preserves_main_file_and_optional_document_environment() {
         let request: BuildRequest = serde_json::from_value(serde_json::json!({"workspace":"x","main":"body.tex","engine":"pdflatex","preamble":"\\documentclass{article}","variants":[{"id":"a","name":"A","suffix":"a","defines":{"Solutions":true}}]})).unwrap();
-        let automatic = wrapper(&request, &request.variants[0], Some("preamble.tex"), true);
+        let automatic = wrapper(
+            &request,
+            &request.variants[0],
+            Some("preamble.tex"),
+            true,
+            false,
+        );
         assert!(automatic.ends_with("\\input{preamble.tex}\n\\begin{document}\n\\input{\\detokenize{body.tex}}\n\\end{document}\n"));
         assert!(automatic.find("Solutionstrue").unwrap() < automatic.find("preamble.tex").unwrap());
-        let explicit = wrapper(&request, &request.variants[0], Some("preamble.tex"), false);
+        let explicit = wrapper(
+            &request,
+            &request.variants[0],
+            Some("preamble.tex"),
+            false,
+            false,
+        );
         assert!(explicit.ends_with("\\input{preamble.tex}\n\\input{\\detokenize{body.tex}}\n"));
         assert!(!explicit.contains("\\begin{document}"));
+    }
+    #[test]
+    fn precompiled_wrapper_starts_after_dump_without_reading_preamble() {
+        let request: BuildRequest = serde_json::from_value(serde_json::json!({"workspace":"x","main":"body.tex","engine":"pdflatex","preamble":"\\documentclass{article}","variants":[{"id":"loesung","name":"Lösung","suffix":"loesung","defines":{},"solution":true}]})).unwrap();
+        assert_eq!(
+            wrapper(&request, &request.variants[0], Some("preamble.tex"), true, true),
+            "\\endofdump\n\\setboolean{loesung}{true}\n\\begin{document}\n\\input{\\detokenize{body.tex}}\n\\end{document}\n"
+        );
+        assert_eq!(
+            wrapper(
+                &request,
+                &request.variants[0],
+                Some("preamble.tex"),
+                false,
+                true
+            ),
+            "\\endofdump\n\\setboolean{loesung}{true}\n\\input{\\detokenize{body.tex}}\n"
+        );
     }
     #[test]
     fn solution_switch_follows_preamble_for_both_document_forms() {
@@ -251,6 +287,7 @@ mod tests {
                     &request.variants[0],
                     Some("preamble.tex"),
                     wraps_document,
+                    false,
                 );
                 let command = format!("\\setboolean{{loesung}}{{{value}}}\n");
                 assert!(result.contains(&format!("\\input{{preamble.tex}}\n{command}")));
@@ -266,10 +303,14 @@ mod tests {
             }
         }
         request.solution = None;
-        assert!(
-            !wrapper(&request, &request.variants[0], Some("preamble.tex"), true)
-                .contains("\\setboolean")
-        );
+        assert!(!wrapper(
+            &request,
+            &request.variants[0],
+            Some("preamble.tex"),
+            true,
+            false
+        )
+        .contains("\\setboolean"));
     }
     #[test]
     fn solution_switch_requires_shared_preamble() {
@@ -279,19 +320,31 @@ mod tests {
     #[test]
     fn fixed_variants_set_opposite_solution_values_after_preamble() {
         let mut request: BuildRequest = serde_json::from_value(serde_json::json!({"workspace":"x","main":"body.tex","engine":"pdflatex","preamble":"\\documentclass{article}","variants":[{"id":"arbeitsblatt","name":"Arbeitsblatt","suffix":"arbeitsblatt","defines":{},"solution":false},{"id":"loesung","name":"Lösung","suffix":"loesung","defines":{},"solution":true}]})).unwrap();
-        assert!(
-            wrapper(&request, &request.variants[0], Some("preamble.tex"), true)
-                .contains("\\input{preamble.tex}\n\\setboolean{loesung}{false}\n")
-        );
-        assert!(
-            wrapper(&request, &request.variants[1], Some("preamble.tex"), true)
-                .contains("\\input{preamble.tex}\n\\setboolean{loesung}{true}\n")
-        );
+        assert!(wrapper(
+            &request,
+            &request.variants[0],
+            Some("preamble.tex"),
+            true,
+            false
+        )
+        .contains("\\input{preamble.tex}\n\\setboolean{loesung}{false}\n"));
+        assert!(wrapper(
+            &request,
+            &request.variants[1],
+            Some("preamble.tex"),
+            true,
+            false
+        )
+        .contains("\\input{preamble.tex}\n\\setboolean{loesung}{true}\n"));
         request.solution = Some(true);
-        assert!(
-            wrapper(&request, &request.variants[0], Some("preamble.tex"), true)
-                .contains("\\setboolean{loesung}{true}\n")
-        );
+        assert!(wrapper(
+            &request,
+            &request.variants[0],
+            Some("preamble.tex"),
+            true,
+            false
+        )
+        .contains("\\setboolean{loesung}{true}\n"));
         request.preamble = None;
         assert!(validate(&request).is_err());
     }
@@ -311,7 +364,7 @@ mod tests {
     fn wrapper_encodes_literals_and_never_embeds_source() {
         let r:BuildRequest=serde_json::from_value(serde_json::json!({"workspace":"x","main":"Meine Datei.tex","engine":"lualatex","variants":[{"id":"a","name":"A","suffix":"a","defines":{"Solutions":true,"Title":"x%\\input{secret}"}}]})).unwrap();
         validate(&r).unwrap();
-        let result = wrapper(&r, &r.variants[0], None, false);
+        let result = wrapper(&r, &r.variants[0], None, false, false);
         assert!(result.contains("\\csname Solutionstrue\\endcsname"));
         assert!(result.contains("x\\%\\textbackslash{}input\\{secret\\}"));
         assert!(result.ends_with("\\input{\\detokenize{Meine Datei.tex}}\n"));

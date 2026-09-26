@@ -73,7 +73,7 @@ test('Meldungszeile springt zur Fehlerstelle, Kopieren bleibt separat', async ({
       return route.fulfill({
         json: {
           token: 'session',
-          capabilities: { version: '1', engines: ['lualatex'], tools: ['lualatex'] },
+          capabilities: { version: '1', engines: ['lualatex', 'pdflatex'], tools: ['lualatex'] },
         },
       });
     if (path === '/api/v1/workspaces') return route.fulfill({ json: { id: 'workspace' } });
@@ -128,7 +128,7 @@ test('Speichern, Entwurf, PDF-Zoom, Final-Export und Wiederöffnung', async ({ p
           capabilities: {
             preamble: true,
             version: '1',
-            engines: ['lualatex'],
+            engines: ['lualatex', 'pdflatex'],
             tools: ['synctex', 'lualatex'],
           },
         },

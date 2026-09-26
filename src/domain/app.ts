@@ -4,6 +4,7 @@ import defaultPreambleText from '../default-preamble.tex?raw';
 import {
   defaultConfig,
   finalPdfName,
+  fixedVariants,
   selectedVariants,
   simplifyConfig,
   stem,
@@ -60,6 +61,12 @@ export type AppState = {
   language: 'de' | 'en';
 };
 export const dirty = (d: Document) => d.text !== d.saved || JSON.stringify(d.config) !== d.savedConfig;
+const seconds = (milliseconds: number) =>
+  `${(milliseconds / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+async function sha256(blob: Blob) {
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 export const template = '\\begin{document}\n\\end{document}\n';
 export class AppController {
   state: AppState = {
@@ -86,6 +93,7 @@ export class AppController {
   private restoredId?: string;
   private cancelRequested = false;
   private persistence = Promise.resolve();
+  private digests = new Map<string, Map<string, string>>();
   readonly bridge = new Bridge();
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -441,6 +449,7 @@ export class AppController {
     }
     if (d.pdf) URL.revokeObjectURL(d.pdf);
     if (d.preview) void this.bridge.release(d.preview.workspace).catch(() => {});
+    this.digests.delete(id);
     this.state.documents = this.state.documents.filter((doc) => doc.id !== id);
     if (this.state.active === id) this.state.active = this.state.documents.at(-1)?.id ?? '';
     this.emit();
@@ -458,6 +467,7 @@ export class AppController {
     this.state.error = '';
     this.state.status = 'Speichern';
     this.emit();
+    const started = performance.now();
     let workspace: string | undefined;
     let retained = false;
     try {
@@ -484,7 +494,10 @@ export class AppController {
       const preamble = this.state.preamble.enabled ? this.state.preamble.text : undefined;
       if (preamble !== undefined && !preamble.trim())
         throw new Error('Bitte unter „Präambel“ eine Präambel einschließlich \\documentclass einfügen.');
-      const variants = selectedVariants(snapshot.config, mode);
+      const variants =
+        mode === 'draft' && preamble !== undefined
+          ? fixedVariants().filter((variant) => variant.solution === this.state.solution)
+          : selectedVariants(snapshot.config, mode);
       this.state.capabilities = await this.bridge.connect();
       if (preamble !== undefined && !this.state.capabilities.preamble)
         throw new Error('Diese Bridge unterstützt keine separate Präambel. Bitte die Bridge aktualisieren.');
@@ -494,17 +507,21 @@ export class AppController {
         );
       this.state.status = 'Dateien vorbereiten';
       this.emit();
+      const preparing = performance.now();
       const inputs = await files.collectFiles(d.dir);
+      const known = this.digests.get(d.id);
+      const digests = new Map<string, string>();
       const prepared = [];
       for (const input of inputs) {
         if (this.cancelRequested) throw new DOMException('Abgebrochen', 'AbortError');
-        const blob = input.path === d.name ? new Blob([snapshot.text]) : input.file;
-        const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
-        const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
-          '',
-        );
+        const main = input.path === d.name;
+        const blob = main ? new Blob([snapshot.text]) : input.file;
+        const identity = `${input.path}|${input.file.size}|${input.file.lastModified}`;
+        const hash = (!main && known?.get(identity)) || (await sha256(blob));
+        if (!main) digests.set(identity, hash);
         prepared.push({ path: input.path, blob, size: blob.size, hash });
       }
+      this.digests.set(d.id, digests);
       const created = await this.bridge.workspace(
         d.preview?.workspace,
         prepared.map(({ path, size, hash }) => ({ path, size, hash })),
@@ -519,13 +536,13 @@ export class AppController {
       }
       if (!inputs.some((input) => input.path === d.name))
         throw new Error('Die Hauptdatei ist nicht mehr im freigegebenen Ordner.');
+      const preparation = `LatexHelper: Dateien vorbereiten · ${seconds(performance.now() - preparing)}\n`;
       const job = await this.bridge.build({
         workspace,
         main: d.name,
         engine: snapshot.config.engine,
         shellEscape: snapshot.config.shellEscape,
         preamble,
-        ...(mode === 'draft' && preamble !== undefined ? { solution: this.state.solution } : {}),
         variants,
       });
       this.job = job.id;
@@ -538,11 +555,14 @@ export class AppController {
         if (result.state === 'running' || result.state === 'queued')
           await new Promise((resolve) => setTimeout(resolve, 120));
       } while (result.state === 'running' || result.state === 'queued');
+      const elapsed = seconds(performance.now() - started);
       this.state.resultDocument = d.id;
       this.state.diagnostics = result.results.flatMap((r) => r.diagnostics);
-      this.state.log = result.results
-        .map((r) => `━━ ${variants.find((v) => v.id === r.variant)?.name ?? r.variant} ━━\n${r.log}`)
-        .join('\n');
+      this.state.log =
+        preparation +
+        result.results
+          .map((r) => `━━ ${variants.find((v) => v.id === r.variant)?.name ?? r.variant} ━━\n${r.log}`)
+          .join('\n');
       const successful = result.results.filter((r) => r.ok);
       const finalReady =
         mode === 'final' &&
@@ -599,7 +619,7 @@ export class AppController {
             ? successful.length
               ? 'Teilweise fehlgeschlagen'
               : 'Fehlgeschlagen'
-            : 'Fertig';
+            : `Fertig · ${elapsed}`;
       if (failed) {
         this.state.panel = true;
         const errors = this.state.diagnostics.filter((e) => e.severity === 'error');

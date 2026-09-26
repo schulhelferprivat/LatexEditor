@@ -1501,7 +1501,8 @@ code {
   margin-left: auto;
 }
 .cm-lintRange-info {
-  text-decoration: underline wavy #e0b35688;
+  text-decoration: underline wavy #e0a530;
+  text-decoration-thickness: 2px;
   text-underline-offset: 3px;
   background-image: none !important;
 }

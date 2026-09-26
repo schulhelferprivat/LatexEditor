@@ -45,7 +45,7 @@ function controller(doc = document()) {
   app.state.active = doc.id;
   vi.spyOn(app.bridge, 'connect').mockResolvedValue({
     version: '1',
-    engines: ['lualatex'],
+    engines: ['lualatex', 'pdflatex'],
     tools: ['lualatex'],
   });
   return app;
@@ -61,7 +61,7 @@ function finalController(results: BuildResult['results']) {
   app.state.preamble = { enabled: true, text: '\\documentclass{article}' };
   vi.mocked(app.bridge.connect).mockResolvedValue({
     version: '1',
-    engines: ['lualatex'],
+    engines: ['lualatex', 'pdflatex'],
     tools: ['lualatex'],
     preamble: true,
   });
@@ -324,7 +324,7 @@ describe('Endversion', () => {
       'main (Arbeitsblatt).pdf',
       'main (Lösung).pdf',
     ]);
-    expect(app.state.status).toBe('Fertig');
+    expect(app.state.status).toMatch(/^Fertig · \d+,\d s$/);
   });
   it('belässt vorhandene PDFs bei einem Teilerfolg unangetastet', async () => {
     const { app, ask, getFileHandle } = finalController([
@@ -429,7 +429,7 @@ describe('Gemeinsame Präambel', () => {
     app.state.preamble = { enabled: true, text: '\\documentclass{article}' };
     vi.mocked(app.bridge.connect).mockResolvedValue({
       version: '1',
-      engines: ['lualatex'],
+      engines: ['lualatex', 'pdflatex'],
       tools: [],
       preamble: true,
     });
@@ -446,12 +446,19 @@ describe('Gemeinsame Präambel', () => {
     vi.spyOn(app.bridge, 'release').mockResolvedValue({});
     await app.build('draft');
     expect(build).toHaveBeenLastCalledWith(
-      expect.objectContaining({ preamble: app.state.preamble.text, shellEscape: true, solution: false }),
+      expect.objectContaining({ preamble: app.state.preamble.text, shellEscape: true }),
     );
+    expect(build.mock.lastCall?.[0]).not.toHaveProperty('solution');
+    expect(build.mock.lastCall?.[0].variants).toEqual([
+      expect.objectContaining({ id: 'arbeitsblatt', solution: false }),
+    ]);
     app.setSolution(true);
     expect(doc.revision).toBe(1);
     await app.build('draft');
-    expect(build).toHaveBeenLastCalledWith(expect.objectContaining({ solution: true }));
+    expect(build.mock.lastCall?.[0]).not.toHaveProperty('solution');
+    expect(build.mock.lastCall?.[0].variants).toEqual([
+      expect.objectContaining({ id: 'loesung', solution: true }),
+    ]);
     await app.build('final');
     expect(build.mock.lastCall?.[0]).not.toHaveProperty('solution');
     expect(build.mock.lastCall?.[0].variants.map((variant) => variant.solution)).toEqual([false, true]);
@@ -494,6 +501,31 @@ describe('Gemeinsame Präambel', () => {
     ]);
     expect(upload).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledWith('next', doc.name, expect.any(Blob));
+  });
+  it('hasht unveränderte Dateien nur beim ersten Build', async () => {
+    const doc = document();
+    doc.dir = { resolve: async () => [doc.name] } as unknown as FileSystemDirectoryHandle;
+    const app = controller(doc);
+    const image = new File(['unchanged'], 'image.pdf', { lastModified: 1 });
+    const read = vi.spyOn(image, 'arrayBuffer');
+    fs.collectFiles.mockResolvedValue([
+      { path: doc.name, file: new File([doc.text], doc.name) },
+      { path: 'image.pdf', file: image },
+    ]);
+    const workspace = vi.spyOn(app.bridge, 'workspace').mockResolvedValue({ id: 'next', missing: [] });
+    vi.spyOn(app.bridge, 'build').mockResolvedValue({ id: 'job' });
+    vi.spyOn(app.bridge, 'status').mockResolvedValue({
+      id: 'job',
+      state: 'done',
+      progress: 'Fertig',
+      results: [],
+    });
+    vi.spyOn(app.bridge, 'release').mockResolvedValue({});
+    await app.build('draft');
+    await app.build('draft');
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(workspace.mock.calls[1][1]).toEqual(workspace.mock.calls[0][1]);
+    expect(app.state.log).toMatch(/^LatexHelper: Dateien vorbereiten · \d+,\d s\n/);
   });
   it('legt neue Dokumente mit leerer Dokumentumgebung ohne Präambel an', () => {
     const app = controller();
