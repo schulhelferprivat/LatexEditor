@@ -49,6 +49,7 @@ export type AppState = {
   saving: boolean;
   error: string;
   capabilities?: Capabilities;
+  bridgeOffline: boolean;
   diagnostics: Diagnostic[];
   resultDocument?: string;
   log: string;
@@ -70,6 +71,7 @@ export class AppController {
     busy: false,
     saving: false,
     error: '',
+    bridgeOffline: false,
     diagnostics: [],
     log: '',
     panel: false,
@@ -145,13 +147,7 @@ export class AppController {
         });
       }
     });
-    void this.bridge
-      .connect()
-      .then((c) => {
-        this.state.capabilities = c;
-        this.emit();
-      })
-      .catch(() => {});
+    void this.connectBridge();
     try {
       const last = await files.lastDocument();
       if (!this.launched && last) {
@@ -164,6 +160,21 @@ export class AppController {
       }
     } catch (error) {
       this.notify(error);
+    }
+  }
+  async connectBridge() {
+    try {
+      const capabilities = await this.bridge.connect();
+      const recovered = this.state.bridgeOffline;
+      this.state.capabilities = capabilities;
+      this.state.bridgeOffline = false;
+      if (recovered && !this.state.busy) this.state.status = 'Bereit';
+      this.emit();
+    } catch {
+      if (this.state.bridgeOffline && !this.state.capabilities) return;
+      this.state.capabilities = undefined;
+      this.state.bridgeOffline = true;
+      this.emit();
     }
   }
   async run(action: () => Promise<unknown>) {

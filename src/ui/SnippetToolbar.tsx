@@ -114,9 +114,7 @@ export function SnippetToolbar({ active, documentId, icons, onInsert }: SnippetT
                         else items.splice(index, 1);
                         menuItems.current.set(group.id, items);
                       }}
-                      className={
-                        snippet.id === 'gap' ? 'snippet-menu-item snippet-menu-item-gap' : 'snippet-menu-item'
-                      }
+                      className="snippet-menu-item"
                       type="button"
                       role="menuitem"
                       onClick={() => {
@@ -124,12 +122,15 @@ export function SnippetToolbar({ active, documentId, icons, onInsert }: SnippetT
                         close(group.id);
                       }}
                     >
-                      {group.showIcons !== false &&
-                        (snippet.id === 'gap' ? (
-                          <span className="gap-snippet-icon">AB .... CD</span>
-                        ) : (
-                          <Icon size={16} />
-                        ))}
+                      {group.showIcons !== false && (
+                        <span className="snippet-menu-item-icon">
+                          {snippet.id === 'gap' ? (
+                            <span className="gap-snippet-icon">AB....CD</span>
+                          ) : (
+                            <Icon size={16} />
+                          )}
+                        </span>
+                      )}
                       <span>{snippet.label}</span>
                     </button>
                   );

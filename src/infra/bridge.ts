@@ -1,5 +1,7 @@
 import type { BuildRequest, BuildResult, Capabilities, SyncLocation } from '../domain/types';
 const api = `${import.meta.env.VITE_BRIDGE_URL ?? ''}/api/v1`;
+export const bridgeUnreachable =
+  'Bridge nicht erreichbar. Bitte LatexHelper Bridge starten und den Zugriff auf lokale Geräte erlauben.';
 export class Bridge {
   private token = '';
   private connecting?: Promise<Capabilities>;
@@ -12,8 +14,6 @@ export class Bridge {
     return this.connecting;
   }
   private async connectOnce(): Promise<Capabilities> {
-    const unreachable =
-      'Bridge nicht erreichbar. Bitte LatexHelper Bridge starten und den Zugriff auf lokale Geräte erlauben.';
     const response = await fetch(`${api}/session`, {
       method: 'POST',
       headers: {
@@ -21,10 +21,18 @@ export class Bridge {
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
     }).catch(() => {
-      throw new Error(unreachable);
+      throw new Error(bridgeUnreachable);
     });
-    if (!response.ok) throw new Error(unreachable);
+    if (!response.ok) {
+      if (response.status === 403)
+        throw new Error(
+          'Bridge verweigert den Zugriff. Bitte die App über http://localhost:38471/ öffnen und den Zugriff auf lokale Geräte erlauben.',
+        );
+      const detail = (await response.text().catch(() => '')).trim();
+      throw new Error(detail || `Bridge: ${response.status}`);
+    }
     const data = await response.json();
     if (data.capabilities?.version !== '1')
       throw new Error('App und Bridge benötigen dieselbe API-Version. Bitte gemeinsam aktualisieren.');

@@ -11,8 +11,8 @@ import {
   Italic,
   Link,
   List,
-  ListOrdered,
   LoaderCircle,
+  Pencil,
   Plus,
   Redo2,
   ShieldCheck,
@@ -24,8 +24,17 @@ import {
   AlertCircle,
   CheckCircle2,
   Copy,
+  PlugZap,
 } from 'lucide-react';
 import { app, dirty } from '../domain/app';
+import { bridgeUnreachable } from '../infra/bridge';
+import {
+  currentDownload,
+  macArmDownload,
+  macIntelDownload,
+  releasesPage,
+  windowsDownload,
+} from '../infra/download';
 import type { Engine } from '../domain/types';
 import type { EditorAdapter } from '../editor/adapter';
 import { Editor } from './Editor';
@@ -34,12 +43,13 @@ import { Dialog } from './Dialog';
 import { Preamble } from './Preamble';
 import { SearchBar } from './SearchBar';
 import { SnippetToolbar } from './SnippetToolbar';
+const download = currentDownload();
 const snippetIcons: Record<string, ComponentType<{ size?: number }>> = {
   Bold,
   Italic,
   Underline,
   List,
-  ListOrdered,
+  Pencil,
   AlphabeticalTasks,
   Sigma,
   Square,
@@ -48,6 +58,7 @@ const snippetIcons: Record<string, ComponentType<{ size?: number }>> = {
   Link,
   Bookmark,
   BlockMath,
+  Checkmark,
   CoordinateSystem,
   Equivalence,
   Interval,
@@ -107,28 +118,25 @@ function NumberedList({ size = 16 }: { size?: number }) {
 }
 function NotebookPresentation({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 1.25} height={size} viewBox="0 0 20 16" fill="none" aria-hidden="true">
-      <rect x="8.1" y="3.2" width="10.5" height="10.2" rx="1.1" stroke="currentColor" strokeWidth="1.2" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
-        d="M10 5.4h5.2M10 7.3h5.2M10 9.2h5.2M10 11.1h5.2"
+        d="M5.1 1.9h8.1c.6 0 1 .4 1 1v10.2c0 .6-.4 1-1 1H5.1"
         stroke="currentColor"
-        strokeWidth="0.9"
-        strokeLinecap="round"
-      />
-      <path d="M16.4 7.3h2.2M16.4 10.9h2.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-      <path
-        d="M2.2 4.1 10.9 2.2c.6-.1 1.1.3 1.1.9v11.7c0 .6-.5 1-1.1.9l-8.7-1.8c-.5-.1-.8-.5-.8-1V5.1c0-.5.3-.9.8-1Z"
-        fill="var(--panel-raised)"
-        stroke="currentColor"
-        strokeWidth="1.2"
+        strokeWidth="1.3"
         strokeLinejoin="round"
       />
+      <path d="M5.1 1.9v12.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       <path
-        d="M4.4 11V5.9l4.3 5.6V5.1"
+        d="M2.6 3.7h2.5M2.6 6.6h2.5M2.6 9.4h2.5M2.6 12.3h2.5"
         stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.6 5.6h4.2M7.6 8h4.2M7.6 10.4h2.7"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -148,15 +156,15 @@ function CoordinateSystem({ size = 16 }: { size?: number }) {
 }
 function InlineMath({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 2.125} height={size} viewBox="0 0 34 16" aria-hidden="true">
+    <svg width={size * 2} height={size} viewBox="0 0 32 16" aria-hidden="true">
       <text
-        x="17"
+        x="0.5"
         y="11.8"
         fill="currentColor"
         fontFamily="monospace"
         fontSize="10.5"
         fontWeight="600"
-        textAnchor="middle"
+        textAnchor="start"
       >
         {'\\( \\)'}
       </text>
@@ -165,15 +173,15 @@ function InlineMath({ size = 16 }: { size?: number }) {
 }
 function BlockMath({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 2.125} height={size} viewBox="0 0 34 16" aria-hidden="true">
+    <svg width={size * 2} height={size} viewBox="0 0 32 16" aria-hidden="true">
       <text
-        x="17"
+        x="0.5"
         y="11.8"
         fill="currentColor"
         fontFamily="monospace"
         fontSize="10.5"
         fontWeight="600"
-        textAnchor="middle"
+        textAnchor="start"
       >
         {'\\[ \\]'}
       </text>
@@ -182,8 +190,16 @@ function BlockMath({ size = 16 }: { size?: number }) {
 }
 function Interval({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 2.125} height={size} viewBox="0 0 34 16" aria-hidden="true">
-      <text x="17" y="12" fill="currentColor" fontSize="11" fontWeight="600" textAnchor="middle">
+    <svg width={size * 2} height={size} viewBox="0 0 32 16" aria-hidden="true">
+      <text
+        x="0.5"
+        y="12"
+        fill="currentColor"
+        fontFamily="monospace"
+        fontSize="10.5"
+        fontWeight="600"
+        textAnchor="start"
+      >
         [a;b]
       </text>
     </svg>
@@ -192,9 +208,22 @@ function Interval({ size = 16 }: { size?: number }) {
 function Equivalence({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      <text x="8" y="11.5" fill="currentColor" fontSize="12" fontWeight="600" textAnchor="middle">
+      <text x="0.5" y="11.5" fill="currentColor" fontSize="12" fontWeight="600" textAnchor="start">
         =
       </text>
+    </svg>
+  );
+}
+function Checkmark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="m2.6 8.6 3.5 3.6 7.3-8.4"
+        stroke="#3fa65a"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -262,8 +291,16 @@ function SnippetCards({ size = 16 }: { size?: number }) {
 }
 function Point({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size * 2.125} height={size} viewBox="0 0 34 16" aria-hidden="true">
-      <text x="17" y="12" fill="currentColor" fontSize="11" fontWeight="600" textAnchor="middle">
+    <svg width={size * 2} height={size} viewBox="0 0 32 16" aria-hidden="true">
+      <text
+        x="0.5"
+        y="12"
+        fill="currentColor"
+        fontFamily="monospace"
+        fontSize="10.5"
+        fontWeight="600"
+        textAnchor="start"
+      >
         (x,y)
       </text>
     </svg>
@@ -297,16 +334,23 @@ function SquareX({ size = 16 }: { size?: number }) {
 function SingleChoice({ size = 16 }: { size?: number }) {
   return (
     <svg width={size * 2.25} height={size} viewBox="0 0 36 16" fill="none" aria-hidden="true">
-      <rect x="0.7" y="0.7" width="14.6" height="14.6" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="20.7" y="0.7" width="14.6" height="14.6" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="0.65" y="0.65" width="14.7" height="14.7" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="20.65" y="0.65" width="14.7" height="14.7" stroke="currentColor" strokeWidth="1.3" />
       <path
-        d="m3.1 4.4 2 7.5 2.5-5.5 2.5 5.5 2.1-7.5M24.4 11.9V4.3h7M24.4 7.8h6"
+        d="m3.3 4.4 1.9 7.5 2.8-5.6 2.8 5.6 1.9-7.5"
         stroke="currentColor"
         strokeWidth="1.7"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <path d="M1.5 13.8 14.4 2.3" stroke="#e44747" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M24.85 11.9V4.4h6.3M24.85 7.9h4.3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="m4.6 4.6 6.8 6.8m0-6.8-6.8 6.8" stroke="#e44747" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -336,7 +380,7 @@ export function App() {
   useEffect(() => {
     void app.init();
     const heartbeat = setInterval(() => {
-      void app.bridge.connect().catch(() => {});
+      void app.connectBridge();
     }, 60000);
     const unload = () => app.dispose();
     window.addEventListener('pagehide', unload);
@@ -524,8 +568,8 @@ export function App() {
           ) : (
             <button
               className="header-action build-button"
-              disabled={!active || blocked}
-              title="Kompilieren"
+              disabled={!active || blocked || state.bridgeOffline}
+              title={state.bridgeOffline ? bridgeUnreachable : 'Kompilieren'}
               aria-label="Kompilieren"
               onClick={() => void app.run(() => app.build(selectedBuildMode))}
             >
@@ -534,6 +578,23 @@ export function App() {
           )}
         </div>
       </div>
+      {state.bridgeOffline && (
+        <div className="bridge-offline" role="status">
+          <PlugZap size={16} />
+          <span>{bridgeUnreachable}</span>
+          <button className="text-button" onClick={() => void app.connectBridge()}>
+            Erneut verbinden
+          </button>
+          <a
+            className="text-button"
+            href={download?.url ?? releasesPage}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Bridge herunterladen
+          </a>
+        </div>
+      )}
       {state.error && (
         <div className="error-banner" role="alert">
           <AlertCircle size={16} />
@@ -816,6 +877,22 @@ export function App() {
                 <p>
                   Das LatexHelper-Paket für Windows oder macOS installieren. Die Bridge startet bei der
                   Anmeldung.
+                </p>
+                <p className="setup-downloads">
+                  {[windowsDownload, macArmDownload, macIntelDownload].map((option) => (
+                    <a
+                      key={option.url}
+                      href={option.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-current={download?.url === option.url ? 'true' : undefined}
+                    >
+                      {option.label}
+                    </a>
+                  ))}
+                  <a href={releasesPage} target="_blank" rel="noopener noreferrer">
+                    Alle Versionen
+                  </a>
                 </p>
               </div>
             </li>

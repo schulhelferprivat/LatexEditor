@@ -53,7 +53,7 @@ export const snippets: Snippet[] = [
   {
     id: 'exercise',
     label: 'Aufgaben-Block',
-    icon: 'ListOrdered',
+    icon: 'Pencil',
     buttonText: 'Aufgaben-Block',
     parts: [
       '\\begin{Aufgabe}[\\hilfsmittelfrei, \\differenzierung{1}, BE: 4]\nHallo.\n\\begin{tasks}\n\\task \\textbf{',
@@ -180,7 +180,7 @@ export const snippets: Snippet[] = [
   {
     id: 'solution',
     label: 'Lösung',
-    icon: 'FileText',
+    icon: 'Checkmark',
     buttonText: 'Lösung',
     parts: ['\\begin{lsg}[', argument('hspaceCM', true), ']{', argument('vspaceCM'), '}\n\\end{lsg}'],
   },
