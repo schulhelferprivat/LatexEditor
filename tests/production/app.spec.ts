@@ -1,4 +1,4 @@
-import { test, expect } from '../e2e/fixture';
+import { test, expect } from '../fixture';
 test('Produktions-PWA ist installierbar, lädt offline und prüft lokal Rechtschreibung', async ({
   page,
   context,

@@ -1,25 +1,21 @@
-import { test as base, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { test as base, expect } from '../fixture';
+
 export const test = base.extend({
-  context: async ({ playwright, baseURL }, use) => {
-    const profile = await mkdtemp(path.join(tmpdir(), 'latexhelper-browser-test-'));
-    const context = await playwright.chromium.launchPersistentContext(profile, {
-      headless: true,
-      baseURL,
-      viewport: { width: 1440, height: 960 },
-      executablePath:
-        process.env.LATEXHELPER_CHROME ??
-        (existsSync('/opt/google/chrome/chrome') ? '/opt/google/chrome/chrome' : undefined),
+  page: async ({ page }, use) => {
+    await page.addInitScript(() => localStorage.setItem('install-dismissed', '1'));
+    await page.route('**/api/v1/**', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/api/v1/session')
+        return route.fulfill({
+          json: {
+            token: 'test',
+            capabilities: { version: '1', engines: ['lualatex'], tools: ['lualatex', 'synctex'] },
+          },
+        });
+      return route.fulfill({ json: {} });
     });
-    try {
-      await use(context);
-    } finally {
-      await context.close();
-      await rm(profile, { recursive: true, force: true });
-    }
+    await use(page);
   },
 });
+
 export { expect };

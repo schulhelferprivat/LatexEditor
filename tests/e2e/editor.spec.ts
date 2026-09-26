@@ -3,15 +3,8 @@ test('leerer Arbeitsplatz, Editor und Snippets funktionieren ohne automatische B
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const builds: string[] = [];
-  await page.route('**/api/v1/**', (route) => {
-    if (route.request().url().endsWith('/builds')) builds.push(route.request().url());
-    return route.fulfill({
-      status: 200,
-      json: {
-        token: 'test',
-        capabilities: { version: '1', engines: ['lualatex'], tools: ['lualatex', 'synctex'] },
-      },
-    });
+  page.on('request', (request) => {
+    if (request.url().endsWith('/builds')) builds.push(request.url());
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Neu beginnen' }).click();
