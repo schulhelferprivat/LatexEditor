@@ -41,6 +41,7 @@ import type { EditorAdapter } from '../editor/adapter';
 import { Editor } from './Editor';
 import { Pdf } from './Pdf';
 import { Dialog } from './Dialog';
+import { InstallPrompts } from './Install';
 import { Preamble } from './Preamble';
 import { SearchBar } from './SearchBar';
 import { SpellBar } from './SpellBar';
@@ -251,9 +252,28 @@ function SnippetCards({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="5.3" y="1.5" width="8.2" height="9.8" rx="1.3" stroke="currentColor" strokeWidth="1.1" />
-      <path d="M7.2 4.4h4.4M7.2 6.3h4.4M7.2 8.2h2.9" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
-      <rect x="2.5" y="4.7" width="8.2" height="9.8" rx="1.3" fill="var(--panel-raised)" stroke="currentColor" strokeWidth="1.1" />
-      <path d="M4.4 7.6h4.4M4.4 9.5h4.4M4.4 11.4h2.9" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
+      <path
+        d="M7.2 4.4h4.4M7.2 6.3h4.4M7.2 8.2h2.9"
+        stroke="currentColor"
+        strokeWidth="0.9"
+        strokeLinecap="round"
+      />
+      <rect
+        x="2.5"
+        y="4.7"
+        width="8.2"
+        height="9.8"
+        rx="1.3"
+        fill="var(--panel-raised)"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
+      <path
+        d="M4.4 7.6h4.4M4.4 9.5h4.4M4.4 11.4h2.9"
+        stroke="currentColor"
+        strokeWidth="0.9"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -1033,6 +1053,7 @@ export function App() {
           </div>
         </Dialog>
       )}
+      <InstallPrompts />
     </div>
   );
 }

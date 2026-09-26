@@ -1,5 +1,6 @@
 import nspell from 'nspell';
 import { spellWords } from '../editor/latex';
+import { createCompoundChecker } from './compound';
 export type SpellIssue = { from: number; to: number; word: string; suggestions: string[] };
 export type SpellRequest = {
   id: number;
@@ -9,7 +10,14 @@ export type SpellRequest = {
   ignoredWords: string[];
 };
 export type SpellResponse = { id: number; issues: SpellIssue[]; error?: string };
-const dictionaries = new Map<string, Promise<ReturnType<typeof nspell>>>();
+type Suggester = (word: string) => string[];
+type Dictionary = {
+  spell: ReturnType<typeof nspell>;
+  accepts: (word: string) => boolean;
+  suggestTail: (word: string, suggest: Suggester) => string[];
+};
+const issueLimit = 2000;
+const dictionaries = new Map<string, Promise<Dictionary>>();
 function dictionary(language: 'de' | 'en') {
   let existing = dictionaries.get(language);
   if (!existing) {
@@ -19,18 +27,30 @@ function dictionary(language: 'de' | 'en') {
         if (!response.ok) throw new Error('Wörterbuch nicht verfügbar. App-Ressourcen neu installieren.');
         return response.text();
       }),
-    ).then(([aff, dic]) => nspell({ aff, dic }));
+    ).then(([aff, dic]) => {
+      const spell = nspell({ aff, dic });
+      const correct = (word: string) => spell.correct(word);
+      if (language !== 'de') return { spell, accepts: correct, suggestTail: () => [] };
+      const { accepts, suggestTail } = createCompoundChecker(dic, correct);
+      return { spell, accepts, suggestTail };
+    });
     dictionaries.set(language, existing);
     existing.catch(() => dictionaries.delete(language));
   }
   return existing;
+}
+function spellSuggestions(loaded: Dictionary, word: string) {
+  const suggest: Suggester = (value) => loaded.spell.suggest(value);
+  const direct = suggest(word).slice(0, 5);
+  if (direct.length) return direct;
+  return loaded.suggestTail(word, suggest);
 }
 let latest = 0;
 self.onmessage = async (event: MessageEvent<SpellRequest>) => {
   const { id, source, language, customWords, ignoredWords } = event.data;
   latest = id;
   try {
-    const spell = await dictionary(language);
+    const loaded = await dictionary(language);
     if (id !== latest) return;
     const issues: SpellIssue[] = [];
     const cache = new Map<string, string[]>();
@@ -38,15 +58,15 @@ self.onmessage = async (event: MessageEvent<SpellRequest>) => {
       [...customWords, ...ignoredWords].map((word) => word.normalize('NFC').toLocaleLowerCase()),
     );
     for (const token of spellWords(source)) {
-      if (accepted.has(token.word.normalize('NFC').toLocaleLowerCase()) || spell.correct(token.word))
-        continue;
-      let suggestions = cache.get(token.word);
+      const word = token.word.normalize('NFC');
+      if (accepted.has(word.toLocaleLowerCase()) || loaded.accepts(word)) continue;
+      let suggestions = cache.get(word);
       if (!suggestions) {
-        suggestions = spell.suggest(token.word).slice(0, 5);
-        cache.set(token.word, suggestions);
+        suggestions = spellSuggestions(loaded, word);
+        cache.set(word, suggestions);
       }
       issues.push({ ...token, suggestions });
-      if (issues.length >= 500) break;
+      if (issues.length >= issueLimit) break;
     }
     self.postMessage({ id, issues } satisfies SpellResponse);
   } catch (error) {
