@@ -8,6 +8,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { verifyDownload } from './verify-downloads.mjs';
+import { executablePids } from './bridge-process.mjs';
 
 setDefaultResultOrder('ipv4first');
 
@@ -88,20 +89,26 @@ async function verifyPrivacy(directory) {
 const stage = await mkdtemp(path.join(tmpdir(), 'latexhelper-portable-'));
 const cache = await mkdtemp(path.join(tmpdir(), 'latexhelper-cache-'));
 let child;
-let bundlePid;
+let bundlePids = [];
 async function stop() {
-  if (bundlePid) {
+  const stoppingBundle = bundlePids.length > 0;
+  for (const pid of bundlePids) {
     try {
-      process.kill(bundlePid, 'SIGTERM');
+      process.kill(pid, 'SIGTERM');
     } catch (error) {
       if (error.code !== 'ESRCH') throw error;
     }
-    bundlePid = undefined;
   }
+  bundlePids = [];
   if (child && child.exitCode === null && child.signalCode === null) {
     const closed = once(child, 'close');
-    child.kill();
-    await Promise.race([closed, setTimeout(5000)]);
+    if (!stoppingBundle) child.kill();
+    await Promise.race([closed, setTimeout(5000, undefined, { ref: false })]);
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await closed;
+      throw new Error('Testprozess wurde nicht innerhalb von fünf Sekunden beendet.');
+    }
   }
   child = undefined;
 }
@@ -181,11 +188,9 @@ try {
     try {
       await handshake();
     } finally {
-      const pattern = `^${executable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`;
-      const result = spawnSync('pgrep', ['-f', pattern], { encoding: 'utf8' });
-      if (result.status === 0) bundlePid = Number(result.stdout.trim());
+      bundlePids = executablePids(executable);
     }
-    assert(Number.isInteger(bundlePid) && bundlePid > 0, 'PID der gestarteten Anwendung fehlt.');
+    assert.equal(bundlePids.length, 1, 'Genau ein Prozess der gestarteten Anwendung erwartet.');
     await stop();
   }
   console.log(`Eigenständiger Start, API, Architektur, Abhängigkeiten und Datenschutz geprüft: ${name}`);
